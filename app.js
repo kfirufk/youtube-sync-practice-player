@@ -79,6 +79,8 @@ const loadBtn = el("loadBtn");
 const playBtn = el("playBtn");
 const restartBtn = el("restartBtn");
 const mutePianoBtn = el("mutePianoBtn");
+const playInlineBtn = el("playInlineBtn");
+const restartInlineBtn = el("restartInlineBtn");
 const scrubber = el("scrubber");
 const timeLabel = el("timeLabel");
 const lyricsBox = el("lyricsBox");
@@ -167,6 +169,8 @@ function enableControls() {
   playBtn.disabled = false;
   restartBtn.disabled = false;
   mutePianoBtn.disabled = false;
+  playInlineBtn.disabled = false;
+  restartInlineBtn.disabled = false;
   scrubber.disabled = false;
 }
 
@@ -268,6 +272,8 @@ async function loadPlayers() {
   playBtn.disabled = true;
   restartBtn.disabled = true;
   mutePianoBtn.disabled = true;
+  playInlineBtn.disabled = true;
+  restartInlineBtn.disabled = true;
 
   if (pianoPlayer && pianoPlayer.destroy) pianoPlayer.destroy();
   if (songPlayer && songPlayer.destroy) songPlayer.destroy();
@@ -429,6 +435,8 @@ loadBtn.addEventListener("click", loadPlayers);
 playBtn.addEventListener("click", togglePlayPause);
 restartBtn.addEventListener("click", restart);
 mutePianoBtn.addEventListener("click", toggleMutePiano);
+playInlineBtn.addEventListener("click", togglePlayPause);
+restartInlineBtn.addEventListener("click", restart);
 
 el("fetchLyricsBtn").addEventListener("click", fetchLyricsLRCLIB);
 el("usePastedBtn").addEventListener("click", usePastedLyrics);

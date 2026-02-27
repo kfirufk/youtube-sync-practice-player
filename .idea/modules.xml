@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/youtube-two-side-tutorial.iml" filepath="$PROJECT_DIR$/.idea/youtube-two-side-tutorial.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/youtube-sync-practice-player.iml" filepath="$PROJECT_DIR$/.idea/youtube-sync-practice-player.iml" />
     </modules>
   </component>
 </project>

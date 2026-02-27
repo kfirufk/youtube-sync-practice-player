@@ -22,6 +22,16 @@ header {
   z-index: 10;
 }
 
+.headerTop {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.configPanel.is-collapsed {
+  display: none;
+}
+
 .row {
   display: flex;
   gap: 10px;

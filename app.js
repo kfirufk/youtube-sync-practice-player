@@ -84,6 +84,8 @@ const timeLabel = el("timeLabel");
 const lyricsBox = el("lyricsBox");
 const presetSelect = el("presetSelect");
 const presetStatus = el("presetStatus");
+const toggleConfigBtn = el("toggleConfigBtn");
+const configPanel = el("configPanel");
 
 function setPresetStatus(text) {
   presetStatus.textContent = text || "";
@@ -92,6 +94,12 @@ function setPresetStatus(text) {
 function setSyncing(isSyncing) {
   syncing = isSyncing;
   document.body.classList.toggle("is-playing", isSyncing);
+}
+
+function setConfigCollapsed(collapsed) {
+  configPanel.classList.toggle("is-collapsed", collapsed);
+  toggleConfigBtn.textContent = collapsed ? "Show setup" : "Hide setup";
+  toggleConfigBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
 }
 
 function renderLyrics() {
@@ -433,6 +441,10 @@ el("applyPresetBtn").addEventListener("click", () => {
 });
 
 el("exportPresetBtn").addEventListener("click", exportCurrentPreset);
+toggleConfigBtn.addEventListener("click", () => {
+  const collapsed = !configPanel.classList.contains("is-collapsed");
+  setConfigCollapsed(collapsed);
+});
 
 scrubber.addEventListener("input", () => {
   if (!canSync()) return;
@@ -479,5 +491,6 @@ window.addEventListener("keydown", (e) => {
 });
 
 // init
+setConfigCollapsed(false);
 renderLyrics();
 loadSongs();

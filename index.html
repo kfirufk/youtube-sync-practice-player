@@ -1,0 +1,138 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Two-Video Piano Sync</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header>
+  <div class="row">
+    <div class="card grow">
+      <div class="row" style="align-items:end;">
+        <div class="grow">
+          <label>Preset name</label>
+          <input id="presetName" type="text" placeholder="Rihanna - Stay (practice)" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px; align-items:end;">
+        <div class="grow">
+          <label>Piano YouTube URL</label>
+          <input id="pianoUrl" type="text" />
+        </div>
+        <div style="width:160px;">
+          <label>Piano starts at (sec)</label>
+          <input id="pianoOffset" type="number" step="0.1" value="0" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px; align-items:end;">
+        <div class="grow">
+          <label>Song / Clip YouTube URL</label>
+          <input id="songUrl" type="text" />
+        </div>
+        <div style="width:160px;">
+          <label>Song starts at (sec)</label>
+          <input id="songOffset" type="number" step="0.1" value="0" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px; gap:8px;">
+        <button id="loadBtn">Load & Sync</button>
+        <button id="playBtn" class="secondary" disabled>Play / Pause (Space)</button>
+        <button id="restartBtn" class="secondary" disabled>Restart (R)</button>
+        <button id="mutePianoBtn" class="secondary" disabled>Mute Piano (M)</button>
+      </div>
+
+      <div class="small" style="margin-top:8px;">
+        Master timeline = the Song/Clip video. Piano is kept at songTime + (pianoStart - songStart).
+      </div>
+
+      <div class="hint small" style="margin-top:8px;">
+        Shortcuts:
+        <span class="kbd">Space</span> play/pause
+        <span class="kbd">R</span> restart
+        <span class="kbd">Left/Right</span> seek -5/+5
+        <span class="kbd">M</span> mute/unmute piano
+        <span class="kbd">0</span> seek to 0
+      </div>
+    </div>
+
+    <div class="card" style="flex: 1 1 320px;">
+      <label>Lyrics (optional)</label>
+      <div class="row" style="gap:8px; align-items:end;">
+        <div class="grow">
+          <label style="margin-top:0;">Artist</label>
+          <input id="artist" type="text" placeholder="Rihanna" />
+        </div>
+        <div class="grow">
+          <label style="margin-top:0;">Title</label>
+          <input id="title" type="text" placeholder="Stay" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px; gap:8px;">
+        <button id="fetchLyricsBtn" class="secondary">Fetch lyrics (LRCLIB)</button>
+        <button id="usePastedBtn" class="secondary">Use pasted</button>
+      </div>
+      <div class="small" style="margin-top:8px;">
+        If LRCLIB has synced lyrics (LRC), the page will highlight lines as you play.
+      </div>
+      <label style="margin-top:10px;">Paste lyrics (plain OR LRC timestamps)</label>
+      <textarea id="lyricsPaste" rows="6" placeholder="[00:12.00] line...
+[00:18.20] next line...
+(or paste plain lyrics)"></textarea>
+    </div>
+
+    <div class="card" style="flex: 1 1 320px;">
+      <label>Presets (songs.json)</label>
+      <div class="presetRow">
+        <div class="grow">
+          <select id="presetSelect"></select>
+        </div>
+        <button id="applyPresetBtn" class="secondary">Apply preset</button>
+      </div>
+      <div class="row" style="margin-top:10px; gap:8px;">
+        <button id="exportPresetBtn" class="secondary">Export current to JSON</button>
+      </div>
+      <label style="margin-top:10px;">Export output</label>
+      <textarea id="exportOutput" class="exportArea" readonly placeholder="Exported JSON will appear here."></textarea>
+      <div id="presetStatus" class="small" style="margin-top:8px;"></div>
+    </div>
+  </div>
+</header>
+
+<section class="players">
+  <div class="playerWrap">
+    <p class="playerTitle">Piano</p>
+    <div class="playerBox"><div id="pianoPlayer"></div></div>
+  </div>
+  <div class="playerWrap">
+    <p class="playerTitle">Song / Clip</p>
+    <div class="playerBox"><div id="songPlayer"></div></div>
+  </div>
+</section>
+
+<section class="controls">
+  <div class="card">
+    <div class="timeline">
+      <span id="timeLabel" class="small" style="min-width:120px;">00:00 / 00:00</span>
+      <input id="scrubber" type="range" min="0" max="100" value="0" step="0.01" disabled />
+    </div>
+    <div class="small" style="margin-top:6px;">
+      Tip: drag the slider to scrub both videos in sync.
+    </div>
+  </div>
+</section>
+
+<section class="lyricsArea">
+  <div class="card">
+    <div class="small">Lyrics viewer (auto-follows while playing)</div>
+    <div id="lyricsBox" class="lyricsBox"></div>
+  </div>
+</section>
+
+<script src="app.js" defer></script>
+</body>
+</html>

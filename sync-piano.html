@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Rihanna – Stay (Piano + Song Sync)</title>
+    <style>
+        :root { color-scheme: dark; }
+        body { margin: 0; font-family: system-ui, Segoe UI, Arial; background:#0b0f14; color:#e6edf3; }
+        header { padding: 12px 14px; border-bottom: 1px solid #1f2a37; background:#0b0f14; position: sticky; top: 0; z-index: 10; }
+        .row { display:flex; gap:10px; flex-wrap: wrap; }
+        .card { background:#0f172a; border:1px solid #1f2a37; border-radius:12px; padding:10px; }
+        .grow { flex: 1 1 480px; }
+        label { font-size: 12px; color:#9fb0c0; display:block; margin-bottom: 4px; }
+        input[type="text"], input[type="number"], textarea {
+            width: 100%; box-sizing: border-box;
+            background:#0b1220; border:1px solid #253244; color:#e6edf3;
+            border-radius:10px; padding:10px; outline:none;
+        }
+        input[type="number"] { max-width: 140px; }
+        button {
+            background:#2563eb; border:none; color:white;
+            padding:10px 12px; border-radius:10px; cursor:pointer;
+            font-weight: 600;
+        }
+        button.secondary { background:#334155; }
+        button:disabled { opacity: .5; cursor: not-allowed; }
+        .players { display:flex; gap:10px; padding: 12px 14px; flex-wrap: wrap; }
+        .playerWrap { flex: 1 1 480px; min-width: 320px; }
+        .playerTitle { font-size: 13px; color:#9fb0c0; margin: 0 0 6px 2px; }
+        .playerBox { aspect-ratio: 16/9; background:#05070a; border:1px solid #1f2a37; border-radius: 14px; overflow:hidden; }
+        .playerBox > div { width: 100%; height: 100%; }
+        .controls { padding: 0 14px 14px; }
+        .timeline { display:flex; align-items:center; gap:10px; }
+        input[type="range"] { width: 100%; }
+        .small { font-size: 12px; color:#9fb0c0; }
+        .lyricsArea { padding: 0 14px 14px; display:grid; gap:10px; }
+        .lyricsBox { height: 40vh; overflow:auto; border:1px solid #1f2a37; border-radius: 14px; background:#0b1220; padding:10px; }
+        .line { padding: 6px 8px; border-radius: 10px; }
+        .line.active { background:#1d4ed8; color:white; }
+        .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#111827; border:1px solid #243244; padding:2px 6px; border-radius: 8px; }
+        .hint { display:flex; flex-wrap: wrap; gap:8px; }
+    </style>
+</head>
+<body>
+<header>
+    <div class="row">
+        <div class="card grow">
+            <div class="row" style="align-items:end;">
+                <div class="grow">
+                    <label>Piano YouTube URL</label>
+                    <input id="pianoUrl" type="text" value="https://www.youtube.com/watch?v=xajaV2y8Wls" />
+                </div>
+                <div style="width:160px;">
+                    <label>Piano starts at (sec)</label>
+                    <input id="pianoOffset" type="number" step="0.1" value="6" />
+                </div>
+            </div>
+
+            <div class="row" style="margin-top:10px; align-items:end;">
+                <div class="grow">
+                    <label>Song / Clip YouTube URL</label>
+                    <input id="songUrl" type="text" value="https://www.youtube.com/watch?v=JF8BRvqGCNs" />
+                </div>
+                <div style="width:160px;">
+                    <label>Song starts at (sec)</label>
+                    <input id="songOffset" type="number" step="0.1" value="0" />
+                </div>
+            </div>
+
+            <div class="row" style="margin-top:10px; gap:8px;">
+                <button id="loadBtn">Load & Sync</button>
+                <button id="playBtn" class="secondary" disabled>Play / Pause (Space)</button>
+                <button id="restartBtn" class="secondary" disabled>Restart (R)</button>
+                <button id="mutePianoBtn" class="secondary" disabled>Mute Piano (M)</button>
+            </div>
+
+            <div class="small" style="margin-top:8px;">
+                Master timeline = the “Song/Clip” video. Piano is kept at <b>songTime + (pianoOffset - songOffset)</b>.
+            </div>
+
+            <div class="hint small" style="margin-top:8px;">
+                Shortcuts:
+                <span class="kbd">Space</span> play/pause
+                <span class="kbd">R</span> restart
+                <span class="kbd">←</span>/<span class="kbd">→</span> seek -5/+5
+                <span class="kbd">M</span> mute/unmute piano
+                <span class="kbd">0</span> seek to 0
+            </div>
+        </div>
+
+        <div class="card" style="flex: 1 1 320px;">
+            <label>Lyrics (optional)</label>
+            <div class="row" style="gap:8px; align-items:end;">
+                <div class="grow">
+                    <label style="margin-top:0;">Artist</label>
+                    <input id="artist" type="text" value="Rihanna" />
+                </div>
+                <div class="grow">
+                    <label style="margin-top:0;">Title</label>
+                    <input id="title" type="text" value="Stay" />
+                </div>
+            </div>
+            <div class="row" style="margin-top:10px; gap:8px;">
+                <button id="fetchLyricsBtn" class="secondary">Fetch lyrics (LRCLIB)</button>
+                <button id="usePastedBtn" class="secondary">Use pasted</button>
+            </div>
+            <div class="small" style="margin-top:8px;">
+                If LRCLIB has synced lyrics (LRC), the page will highlight lines as you play. :contentReference[oaicite:1]{index=1}
+            </div>
+            <label style="margin-top:10px;">Paste lyrics (plain OR LRC timestamps)</label>
+            <textarea id="lyricsPaste" rows="6" placeholder="[00:12.00] line...
+[00:18.20] next line...
+(or paste plain lyrics)"></textarea>
+        </div>
+    </div>
+</header>
+
+<section class="players">
+    <div class="playerWrap">
+        <p class="playerTitle">Piano</p>
+        <div class="playerBox"><div id="pianoPlayer"></div></div>
+    </div>
+    <div class="playerWrap">
+        <p class="playerTitle">Song / Clip</p>
+        <div class="playerBox"><div id="songPlayer"></div></div>
+    </div>
+</section>
+
+<section class="controls">
+    <div class="card">
+        <div class="timeline">
+            <span id="timeLabel" class="small" style="min-width:120px;">00:00 / 00:00</span>
+            <input id="scrubber" type="range" min="0" max="100" value="0" step="0.01" disabled />
+        </div>
+        <div class="small" style="margin-top:6px;">
+            Tip: drag the slider to scrub both videos in sync.
+        </div>
+    </div>
+</section>
+
+<section class="lyricsArea">
+    <div class="card">
+        <div class="small">Lyrics viewer (auto-follows while playing)</div>
+        <div id="lyricsBox" class="lyricsBox"></div>
+    </div>
+</section>
+
+<script>
+    // --- Helpers ---
+    function extractYouTubeId(url) {
+        try {
+            const u = new URL(url.trim());
+            if (u.hostname.includes("youtu.be")) return u.pathname.replace("/", "");
+            if (u.searchParams.get("v")) return u.searchParams.get("v");
+            // fallback: last path segment
+            const parts = u.pathname.split("/").filter(Boolean);
+            return parts[parts.length - 1] || "";
+        } catch { return ""; }
+    }
+
+    function fmtTime(sec) {
+        sec = Math.max(0, sec || 0);
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0");
+    }
+
+    // Parse LRC: lines like [mm:ss.xx] text
+    function parseLRC(text) {
+        const lines = [];
+        const re = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,2}))?\]\s*(.*)/g;
+        const raw = text.split(/\r?\n/);
+        for (const row of raw) {
+            let m;
+            let matched = false;
+            while ((m = re.exec(row)) !== null) {
+                matched = true;
+                const mm = parseInt(m[1], 10);
+                const ss = parseInt(m[2], 10);
+                const cs = m[3] ? parseInt(m[3].padEnd(2,"0"), 10) : 0; // centiseconds
+                const t = mm * 60 + ss + cs / 100;
+                const content = (m[4] || "").trim();
+                lines.push({ t, content });
+            }
+            if (!matched && row.trim()) {
+                // plain text line (no time)
+                lines.push({ t: null, content: row.trim() });
+            }
+            re.lastIndex = 0;
+        }
+        // If any timed lines exist, sort them
+        const hasTimed = lines.some(x => x.t !== null);
+        if (hasTimed) return lines.filter(x => x.t !== null && x.content).sort((a,b)=>a.t-b.t);
+        // Otherwise plain lyrics
+        return lines.filter(x => x.content).map((x,i)=>({t:null, content:x.content, i}));
+    }
+
+    // --- State ---
+    let song, piano;
+    let readySong = false, readyPiano = false;
+    let syncing = false;
+    let userScrubbing = false;
+
+    let baseOffset = 0; // pianoTime = songTime + baseOffset
+    let songStartOffset = 0;
+    let duration = 0;
+
+    let lyrics = [];
+    let lastActiveIdx = -1;
+
+    // --- UI ---
+    const el = (id) => document.getElementById(id);
+    const loadBtn = el("loadBtn");
+    const playBtn = el("playBtn");
+    const restartBtn = el("restartBtn");
+    const mutePianoBtn = el("mutePianoBtn");
+    const scrubber = el("scrubber");
+    const timeLabel = el("timeLabel");
+    const lyricsBox = el("lyricsBox");
+
+    function renderLyrics() {
+        lyricsBox.innerHTML = "";
+        if (!lyrics.length) {
+            lyricsBox.innerHTML = `<div class="small">No lyrics loaded. Fetch from LRCLIB or paste your own.</div>`;
+            return;
+        }
+        lyrics.forEach((l, idx) => {
+            const div = document.createElement("div");
+            div.className = "line";
+            div.dataset.idx = String(idx);
+            div.textContent = (l.t != null ? `[${fmtTime(l.t)}] ` : "") + l.content;
+            lyricsBox.appendChild(div);
+        });
+        lastActiveIdx = -1;
+    }
+
+    function setActiveLyricByTime(t) {
+        if (!lyrics.length) return;
+        // timed lyrics only
+        if (lyrics[0].t == null) return;
+
+        // find last line with time <= t
+        let lo = 0, hi = lyrics.length - 1, ans = -1;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (lyrics[mid].t <= t) { ans = mid; lo = mid + 1; }
+            else hi = mid - 1;
+        }
+        if (ans === -1) ans = 0;
+        if (ans === lastActiveIdx) return;
+
+        const prev = lyricsBox.querySelector(".line.active");
+        if (prev) prev.classList.remove("active");
+
+        const curr = lyricsBox.querySelector(`.line[data-idx="${ans}"]`);
+        if (curr) {
+            curr.classList.add("active");
+            curr.scrollIntoView({ block: "center", behavior: "smooth" });
+        }
+        lastActiveIdx = ans;
+    }
+
+    // --- YouTube API boot ---
+    function ensureYTApi() {
+        return new Promise((resolve) => {
+            if (window.YT && window.YT.Player) return resolve();
+            const tag = document.createElement("script");
+            tag.src = "https://www.youtube.com/iframe_api";
+            window.onYouTubeIframeAPIReady = () => resolve();
+            document.head.appendChild(tag);
+        });
+    }
+
+    function canSync() { return readySong && readyPiano; }
+
+    function enableControls() {
+        playBtn.disabled = false;
+        restartBtn.disabled = false;
+        mutePianoBtn.disabled = false;
+        scrubber.disabled = false;
+    }
+
+    function calcOffsets() {
+        const pOff = parseFloat(el("pianoOffset").value || "0");
+        const sOff = parseFloat(el("songOffset").value || "0");
+        songStartOffset = sOff;
+        baseOffset = pOff - sOff; // pianoTime = songTime + baseOffset
+    }
+
+    function safeSeekBoth(songTime) {
+        songTime = Math.max(0, Math.min(duration || songTime, songTime));
+        const pianoTime = Math.max(0, songTime + baseOffset);
+
+        // Seek song first (master)
+        song.seekTo(songTime + songStartOffset, true);
+        piano.seekTo(pianoTime + songStartOffset, true); // align in same master frame
+    }
+
+    // drift correction
+    function syncLoop() {
+        if (!canSync()) return;
+        if (userScrubbing) return;
+
+        const st = song.getCurrentTime() - songStartOffset;
+        const pt = piano.getCurrentTime() - songStartOffset;
+        const targetP = st + baseOffset;
+
+        // If drift is big, correct it
+        const drift = pt - targetP;
+        if (Math.abs(drift) > 0.25) {
+            piano.seekTo(Math.max(0, targetP + songStartOffset), true);
+        }
+
+        // Update UI
+        if (!syncing) return;
+        scrubber.value = String(Math.max(0, Math.min(duration, st)));
+        timeLabel.textContent = `${fmtTime(st)} / ${fmtTime(duration)}`;
+        setActiveLyricByTime(st);
+
+        requestAnimationFrame(syncLoop);
+    }
+
+    function isPlayingAny() {
+        // 1 = playing
+        return (song.getPlayerState && song.getPlayerState() === 1) || (piano.getPlayerState && piano.getPlayerState() === 1);
+    }
+
+    function togglePlayPause() {
+        if (!canSync()) return;
+        const st = Math.max(0, song.getCurrentTime() - songStartOffset);
+
+        // make sure both are aligned right before toggling play
+        safeSeekBoth(st);
+
+        if (isPlayingAny()) {
+            song.pauseVideo(); piano.pauseVideo();
+            syncing = false;
+        } else {
+            song.playVideo(); piano.playVideo();
+            syncing = true;
+            requestAnimationFrame(syncLoop);
+        }
+    }
+
+    function restart() {
+        if (!canSync()) return;
+        song.pauseVideo(); piano.pauseVideo();
+        safeSeekBoth(0);
+        syncing = false;
+        scrubber.value = "0";
+        timeLabel.textContent = `${fmtTime(0)} / ${fmtTime(duration)}`;
+        setActiveLyricByTime(0);
+    }
+
+    function toggleMutePiano() {
+        if (!piano) return;
+        if (piano.isMuted()) piano.unMute();
+        else piano.mute();
+        mutePianoBtn.textContent = piano.isMuted() ? "Unmute Piano (M)" : "Mute Piano (M)";
+    }
+
+    async function loadPlayers() {
+        calcOffsets();
+
+        const pianoId = extractYouTubeId(el("pianoUrl").value);
+        const songId  = extractYouTubeId(el("songUrl").value);
+
+        if (!pianoId || !songId) {
+            alert("Could not parse one of the YouTube URLs (missing video id).");
+            return;
+        }
+
+        await ensureYTApi();
+
+        readySong = false; readyPiano = false;
+        syncing = false;
+        scrubber.disabled = true;
+        playBtn.disabled = true;
+        restartBtn.disabled = true;
+        mutePianoBtn.disabled = true;
+
+        // (Re)create players
+        if (piano?.destroy) piano.destroy();
+        if (song?.destroy) song.destroy();
+
+        piano = new YT.Player("pianoPlayer", {
+            videoId: pianoId,
+            playerVars: { playsinline: 1, modestbranding: 1, rel: 0 },
+            events: {
+                onReady: () => {
+                    readyPiano = true;
+                    // You said you start the piano muted:
+                    piano.mute();
+                    mutePianoBtn.textContent = "Unmute Piano (M)";
+                    if (canSync()) onBothReady();
+                }
+            }
+        });
+
+        song = new YT.Player("songPlayer", {
+            videoId: songId,
+            playerVars: { playsinline: 1, modestbranding: 1, rel: 0 },
+            events: {
+                onReady: () => {
+                    readySong = true;
+                    if (canSync()) onBothReady();
+                }
+            }
+        });
+
+        function onBothReady() {
+            // Grab duration from song (master)
+            duration = Math.max(0, (song.getDuration?.() || 0) - songStartOffset);
+            scrubber.max = String(duration || 100);
+            enableControls();
+
+            // Ensure perfect initial alignment
+            safeSeekBoth(0);
+            timeLabel.textContent = `${fmtTime(0)} / ${fmtTime(duration)}`;
+            setActiveLyricByTime(0);
+        }
+    }
+
+    // --- Lyrics fetch (LRCLIB) ---
+    async function fetchLyricsLRCLIB() {
+        const artist = el("artist").value.trim();
+        const title  = el("title").value.trim();
+        if (!artist || !title) return alert("Enter Artist + Title first.");
+
+        // LRCLIB has a public API docs; commonly used: /api/search then /api/get by id. :contentReference[oaicite:2]{index=2}
+        // We'll try search first. If CORS blocks in some environments, paste lyrics manually.
+        try {
+            const qs = new URLSearchParams({ q: `${artist} ${title}` });
+            const searchUrl = `https://lrclib.net/api/search?${qs.toString()}`;
+            const r = await fetch(searchUrl);
+            if (!r.ok) throw new Error(`Search failed: ${r.status}`);
+            const arr = await r.json();
+            if (!Array.isArray(arr) || arr.length === 0) throw new Error("No results in LRCLIB.");
+
+            // pick best-ish match (first result)
+            const best = arr[0];
+            if (!best?.id) throw new Error("LRCLIB result missing id.");
+
+            const getUrl = `https://lrclib.net/api/get?id=${encodeURIComponent(best.id)}`;
+            const r2 = await fetch(getUrl);
+            if (!r2.ok) throw new Error(`Get failed: ${r2.status}`);
+            const rec = await r2.json();
+
+            // Fields vary by record; try common ones:
+            const text = (rec?.syncedLyrics || rec?.synced_lyrics || rec?.plainLyrics || rec?.plain_lyrics || "").trim();
+            if (!text) throw new Error("No lyrics text returned.");
+            el("lyricsPaste").value = text;
+
+            lyrics = parseLRC(text);
+            renderLyrics();
+            // align highlight to current time
+            if (canSync()) setActiveLyricByTime(Math.max(0, song.getCurrentTime() - songStartOffset));
+        } catch (e) {
+            console.warn(e);
+            alert("LRCLIB fetch failed (or blocked). Paste lyrics manually in the box and click “Use pasted”.");
+        }
+    }
+
+    function usePastedLyrics() {
+        const text = el("lyricsPaste").value.trim();
+        if (!text) return alert("Paste some lyrics first.");
+        lyrics = parseLRC(text);
+        renderLyrics();
+    }
+
+    // --- Events ---
+    loadBtn.addEventListener("click", loadPlayers);
+    playBtn.addEventListener("click", togglePlayPause);
+    restartBtn.addEventListener("click", restart);
+    mutePianoBtn.addEventListener("click", toggleMutePiano);
+
+    el("fetchLyricsBtn").addEventListener("click", fetchLyricsLRCLIB);
+    el("usePastedBtn").addEventListener("click", usePastedLyrics);
+
+    scrubber.addEventListener("input", () => {
+        if (!canSync()) return;
+        userScrubbing = true;
+        const t = parseFloat(scrubber.value || "0");
+        timeLabel.textContent = `${fmtTime(t)} / ${fmtTime(duration)}`;
+        setActiveLyricByTime(t);
+    });
+
+    scrubber.addEventListener("change", () => {
+        if (!canSync()) return;
+        const t = parseFloat(scrubber.value || "0");
+        safeSeekBoth(t);
+        userScrubbing = false;
+        // If it was playing, keep playing
+        if (isPlayingAny()) {
+            song.playVideo(); piano.playVideo();
+            syncing = true;
+            requestAnimationFrame(syncLoop);
+        }
+    });
+
+    window.addEventListener("keydown", (e) => {
+        if (["INPUT","TEXTAREA"].includes(document.activeElement?.tagName)) return;
+
+        if (e.code === "Space") { e.preventDefault(); togglePlayPause(); }
+        else if (e.key.toLowerCase() === "r") { restart(); }
+        else if (e.key.toLowerCase() === "m") { toggleMutePiano(); }
+        else if (e.key === "0") { safeSeekBoth(0); }
+        else if (e.key === "ArrowLeft") {
+            if (!canSync()) return;
+            const t = Math.max(0, (song.getCurrentTime() - songStartOffset) - 5);
+            safeSeekBoth(t);
+        } else if (e.key === "ArrowRight") {
+            if (!canSync()) return;
+            const t = Math.min(duration, (song.getCurrentTime() - songStartOffset) + 5);
+            safeSeekBoth(t);
+        }
+    });
+
+    // init empty lyrics view
+    renderLyrics();
+</script>
+</body>
+</html>

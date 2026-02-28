@@ -765,6 +765,8 @@ async function loadPlayers() {
   };
 
   pianoPlayer = new YT.Player("pianoPlayer", {
+    width: "100%",
+    height: "100%",
     videoId: pianoId,
     playerVars: {
       playsinline: 1,
@@ -785,6 +787,8 @@ async function loadPlayers() {
   });
 
   songPlayer = new YT.Player("songPlayer", {
+    width: "100%",
+    height: "100%",
     videoId: songId,
     playerVars: {
       playsinline: 1,

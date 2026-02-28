@@ -267,8 +267,18 @@ button.primary {
 }
 
 .playerBox > div {
+  position: relative;
   width: 100%;
   height: 100%;
+}
+
+.playerBox iframe {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  border: 0;
 }
 
 .transport {

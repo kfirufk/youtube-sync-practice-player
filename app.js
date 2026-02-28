@@ -219,6 +219,8 @@ let ytApiPromise = null;
 let prefersSchemeMql = null;
 let autosaveTimer = null;
 let didRestoreDraft = false;
+let isPreparingPlayers = false;
+let lastPlayRequestAt = 0;
 
 let lyrics = [];
 let lastActiveIdx = -1;
@@ -1075,6 +1077,7 @@ function cancelCountdown() {
 
 function startPlaybackNow() {
   if (!canSync()) return;
+  lastPlayRequestAt = Date.now();
   const t = userScrubbing ? ensureNumber(scrubber.value, 0) : getMasterTime();
   safeSeekBoth(t);
   songPlayer.playVideo();
@@ -1446,6 +1449,7 @@ function onPlayerStateChange(evt) {
   if (!canSync()) return;
 
   const stateCode = evt?.data;
+  const recentPlayRequest = Date.now() - lastPlayRequestAt < 2200;
 
   if (stateCode === YT.PlayerState.BUFFERING) {
     appState.diagnostics.bufferingEvents += 1;
@@ -1453,6 +1457,12 @@ function onPlayerStateChange(evt) {
   }
 
   if (stateCode === YT.PlayerState.PLAYING && !isSyncing) {
+    if (isPreparingPlayers || !recentPlayRequest) {
+      songPlayer.pauseVideo();
+      pianoPlayer.pauseVideo();
+      setSyncing(false);
+      return;
+    }
     setSyncing(true);
     return;
   }
@@ -1498,6 +1508,8 @@ async function loadPlayers() {
 
   cancelCountdown();
   setSyncing(false);
+  lastPlayRequestAt = 0;
+  isPreparingPlayers = true;
   disableTransport();
   readySong = false;
   readyPiano = false;
@@ -1525,11 +1537,15 @@ async function loadPlayers() {
 
     setTimeout(() => {
       safeSeekBoth(0, true);
+      songPlayer.pauseVideo();
+      pianoPlayer.pauseVideo();
+      setSyncing(false);
       enableTransport();
       updateMuteIcon();
       setTransportTime(0);
       setActiveLyricByTime(0);
       setCalibrateStatus("Players loaded. If both frames match musically, click calibration.");
+      isPreparingPlayers = false;
       scheduleAutosave();
     }, 240);
   };

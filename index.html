@@ -1,145 +1,186 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Two-Video Piano Sync</title>
+  <title>Practice Sync Player</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<header>
-  <div class="headerTop">
-    <button id="toggleConfigBtn" class="secondary" type="button" aria-expanded="true">Hide setup</button>
+<header class="topbar">
+  <div>
+    <h1>Practice Sync Player</h1>
+    <p class="subtitle">Sync tutorial and official clip on one timeline.</p>
   </div>
-
-  <div id="configPanel" class="configPanel">
-    <div class="row">
-    <div class="card grow">
-      <div class="row" style="align-items:end;">
-        <div class="grow">
-          <label>Preset name</label>
-          <input id="presetName" type="text" placeholder="Rihanna - Stay (practice)" />
-        </div>
-      </div>
-
-      <div class="row" style="margin-top:10px; align-items:end;">
-        <div class="grow">
-          <label>Piano YouTube URL</label>
-          <input id="pianoUrl" type="text" />
-        </div>
-        <div style="width:160px;">
-          <label>Piano starts at (sec)</label>
-          <input id="pianoOffset" type="number" step="0.1" value="0" />
-        </div>
-      </div>
-
-      <div class="row" style="margin-top:10px; align-items:end;">
-        <div class="grow">
-          <label>Song / Clip YouTube URL</label>
-          <input id="songUrl" type="text" />
-        </div>
-        <div style="width:160px;">
-          <label>Song starts at (sec)</label>
-          <input id="songOffset" type="number" step="0.1" value="0" />
-        </div>
-      </div>
-
-      <div class="row" style="margin-top:10px; gap:8px;">
-        <button id="loadBtn">Load & Sync</button>
-        <button id="playBtn" class="secondary" disabled>Play / Pause (Space)</button>
-        <button id="restartBtn" class="secondary" disabled>Restart (R)</button>
-        <button id="mutePianoBtn" class="secondary" disabled>Mute Piano (M)</button>
-      </div>
-
-      <div class="small" style="margin-top:8px;">
-        Master timeline = the Song/Clip video. Piano is kept at songTime + (pianoStart - songStart).
-      </div>
-
-      <div class="hint small" style="margin-top:8px;">
-        Shortcuts:
-        <span class="kbd">Space</span> play/pause
-        <span class="kbd">R</span> restart
-        <span class="kbd">Left/Right</span> seek -5/+5
-        <span class="kbd">M</span> mute/unmute piano
-        <span class="kbd">0</span> seek to 0
-      </div>
-    </div>
-
-    <div class="card" style="flex: 1 1 320px;">
-      <label>Lyrics (optional)</label>
-      <div class="row" style="gap:8px; align-items:end;">
-        <div class="grow">
-          <label style="margin-top:0;">Artist</label>
-          <input id="artist" type="text" placeholder="Rihanna" />
-        </div>
-        <div class="grow">
-          <label style="margin-top:0;">Title</label>
-          <input id="title" type="text" placeholder="Stay" />
-        </div>
-      </div>
-      <div class="row" style="margin-top:10px; gap:8px;">
-        <button id="fetchLyricsBtn" class="secondary">Fetch lyrics (LRCLIB)</button>
-        <button id="usePastedBtn" class="secondary">Use pasted</button>
-      </div>
-      <div class="small" style="margin-top:8px;">
-        If LRCLIB has synced lyrics (LRC), the page will highlight lines as you play.
-      </div>
-      <label style="margin-top:10px;">Paste lyrics (plain OR LRC timestamps)</label>
-      <textarea id="lyricsPaste" rows="6" placeholder="[00:12.00] line...
-[00:18.20] next line...
-(or paste plain lyrics)"></textarea>
-    </div>
-
-    <div class="card" style="flex: 1 1 320px;">
-      <label>Presets (songs.json)</label>
-      <div class="presetRow">
-        <div class="grow">
-          <select id="presetSelect"></select>
-        </div>
-        <button id="applyPresetBtn" class="secondary">Apply preset</button>
-      </div>
-      <div class="row" style="margin-top:10px; gap:8px;">
-        <button id="exportPresetBtn" class="secondary">Export current to JSON</button>
-      </div>
-      <label style="margin-top:10px;">Export output</label>
-      <textarea id="exportOutput" class="exportArea" readonly placeholder="Exported JSON will appear here."></textarea>
-      <div id="presetStatus" class="small" style="margin-top:8px;"></div>
-    </div>
-  </div>
+  <div class="topActions">
+    <button id="shortcutsBtn" class="iconBtn" type="button" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Zm0 2v8h16V8Zm2 2h2v2H6Zm3 0h2v2H9Zm3 0h2v2h-2Zm3 0h3v2h-3ZM6 13h8v2H6Z"/></svg>
+    </button>
+    <button id="toggleConfigBtn" class="iconBtn" type="button" aria-expanded="true" title="Collapse setup" aria-label="Collapse setup">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 14 5-5 5 5-1.4 1.4-3.6-3.6-3.6 3.6z"/></svg>
+    </button>
   </div>
 </header>
 
-<section class="players">
-  <div class="playerWrap">
-    <p class="playerTitle">Piano</p>
-    <div class="playerBox"><div id="pianoPlayer"></div></div>
-  </div>
-  <div class="playerWrap">
-    <p class="playerTitle">Song / Clip</p>
-    <div class="playerBox"><div id="songPlayer"></div></div>
+<section id="configPanel" class="configPanel">
+  <div class="panelGrid">
+    <div class="card">
+      <h2>Setup</h2>
+      <label for="presetSelect">Preset</label>
+      <div class="row tight">
+        <select id="presetSelect"></select>
+        <button id="applyPresetBtn" class="secondary" type="button">Apply</button>
+      </div>
+
+      <label for="presetName">Preset name</label>
+      <input id="presetName" type="text" placeholder="Song - Practice" />
+
+      <label for="songUrl">Official clip URL</label>
+      <input id="songUrl" type="text" placeholder="https://www.youtube.com/watch?v=..." />
+
+      <div class="row cols2">
+        <div>
+          <label for="songOffset">Official starts at (sec)</label>
+          <input id="songOffset" type="number" step="0.1" value="0" />
+        </div>
+        <div>
+          <label for="countdownSec">Play countdown (sec)</label>
+          <select id="countdownSec">
+            <option value="0">Off</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4" selected>4</option>
+            <option value="5">5</option>
+            <option value="8">8</option>
+          </select>
+        </div>
+      </div>
+
+      <label for="pianoUrl">Tutorial URL</label>
+      <input id="pianoUrl" type="text" placeholder="https://www.youtube.com/watch?v=..." />
+
+      <label for="pianoOffset">Tutorial starts at (sec)</label>
+      <input id="pianoOffset" type="number" step="0.1" value="0" />
+
+      <div class="row">
+        <button id="loadBtn" class="primary" type="button">Load &amp; Sync</button>
+      </div>
+      <div class="small" id="presetStatus"></div>
+    </div>
+
+    <div class="card">
+      <h2>Timeline Labels</h2>
+      <div class="row cols2">
+        <div>
+          <label for="markerName">Label</label>
+          <input id="markerName" type="text" placeholder="Verse 1" />
+        </div>
+        <div>
+          <label for="markerKey">Shortcut key</label>
+          <select id="markerKey"></select>
+        </div>
+      </div>
+
+      <div class="row cols2">
+        <div>
+          <label for="markerSource">Time source</label>
+          <select id="markerSource">
+            <option value="song">Official clip</option>
+            <option value="piano">Tutorial</option>
+          </select>
+        </div>
+        <div>
+          <label for="markerTime">Time (sec)</label>
+          <input id="markerTime" type="number" step="0.1" value="0" />
+        </div>
+      </div>
+
+      <div class="row tight">
+        <button id="useCurrentMarkerBtn" class="secondary" type="button">Use current</button>
+        <button id="addMarkerBtn" class="secondary" type="button">Add / Update</button>
+      </div>
+
+      <div id="markersList" class="markersList small">No labels yet.</div>
+    </div>
+
+    <div class="card">
+      <h2>Lyrics &amp; Export</h2>
+      <label for="lyricsPaste">Lyrics (manual)</label>
+      <textarea id="lyricsPaste" rows="9" placeholder="Paste plain lyrics or LRC timestamps here..."></textarea>
+
+      <div class="row tight">
+        <button id="usePastedBtn" class="secondary" type="button">Use pasted lyrics</button>
+        <button id="exportPresetBtn" class="secondary" type="button">Export JSON</button>
+      </div>
+
+      <label for="exportOutput">Export output</label>
+      <textarea id="exportOutput" class="exportArea" readonly placeholder="Exported JSON appears here."></textarea>
+    </div>
   </div>
 </section>
 
-<section class="controls">
-  <div class="card">
-    <div class="timeline">
-      <button id="playInlineBtn" class="secondary" disabled>Play / Pause</button>
-      <button id="restartInlineBtn" class="secondary" disabled>Back to start</button>
-      <span id="timeLabel" class="small" style="min-width:120px;">00:00 / 00:00</span>
-      <input id="scrubber" type="range" min="0" max="100" value="0" step="0.01" disabled />
+<main>
+  <section class="players">
+    <div class="playerWrap">
+      <p class="playerTitle">Tutorial</p>
+      <div class="playerBox"><div id="pianoPlayer"></div></div>
     </div>
-    <div class="small" style="margin-top:6px;">
-      Tip: drag the slider to scrub both videos in sync.
+    <div class="playerWrap">
+      <p class="playerTitle">Official Clip</p>
+      <div class="playerBox"><div id="songPlayer"></div></div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section class="lyricsArea">
-  <div class="card">
-    <div class="small">Lyrics viewer (auto-follows while playing)</div>
+  <section class="transport card">
+    <div class="transportTop">
+      <div class="transportButtons">
+        <button id="playBtn" class="iconBtn large" type="button" disabled title="Play / Pause (Space)" aria-label="Play / Pause">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path id="playIconPath" d="M8 5v14l11-7z"/></svg>
+        </button>
+        <button id="restartBtn" class="iconBtn" type="button" disabled title="Back to start (R)" aria-label="Back to start">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 7l5 5V9c3.3 0 6 2.7 6 6s-2.7 6-6 6a6 6 0 0 1-5.7-4H4.2A8 8 0 1 0 12 5"/></svg>
+        </button>
+        <button id="mutePianoBtn" class="iconBtn" type="button" disabled title="Mute / Unmute tutorial (M)" aria-label="Mute tutorial">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path id="muteIconPath" d="M5 9v6h4l5 5V4L9 9Zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4"/></svg>
+        </button>
+        <button id="lyricsFocusBtn" class="iconBtn" type="button" title="Focus lyrics" aria-label="Focus lyrics">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v2H6v5H4Zm10 0h6v6h-2V6h-4ZM4 14h2v4h5v2H4Zm14 0h2v6h-6v-2h4Z"/></svg>
+        </button>
+      </div>
+      <div id="timeLabel" class="timeLabel">00:00 / 00:00</div>
+    </div>
+
+    <input id="scrubber" type="range" min="0" max="100" value="0" step="0.01" disabled />
+
+    <div class="small hintText">
+      `Space` play/pause, `R` restart, `M` mute tutorial, `Left/Right` seek, `1-9` jump to labels, `?` shortcuts
+    </div>
+  </section>
+
+  <section class="lyricsSection card">
+    <div class="lyricsHeader">
+      <h2>Lyrics</h2>
+      <span class="small">Manual mode</span>
+    </div>
     <div id="lyricsBox" class="lyricsBox"></div>
+  </section>
+</main>
+
+<div id="countdownOverlay" class="countdownOverlay hidden" aria-live="polite">
+  <div id="countdownValue" class="countdownValue">4</div>
+</div>
+
+<div id="shortcutsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
+  <div class="modalCard">
+    <div class="modalHead">
+      <h2 id="shortcutsTitle">Keyboard Shortcuts</h2>
+      <button id="closeShortcutsBtn" class="iconBtn" type="button" aria-label="Close shortcuts">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19 6.4-1.4-1.4L12 10.6 6.4 5 5 6.4l5.6 5.6L5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6z"/></svg>
+      </button>
+    </div>
+    <div id="shortcutsList" class="shortcutsList"></div>
   </div>
-</section>
+</div>
 
 <script src="app.js" defer></script>
 </body>

@@ -229,6 +229,9 @@ let lastPlayRequestAt = 0;
 
 let lyrics = [];
 let lastActiveIdx = -1;
+let practiceCurrentLyricEl = null;
+let practiceCompactLyricsEl = null;
+let practiceFitRaf = 0;
 
 const appState = {
   songs: [],
@@ -457,10 +460,87 @@ function onFullscreenChange() {
 }
 
 // --- Lyrics ---
+function getCompactLyricsText() {
+  if (!lyrics.length) return "";
+  return lyrics
+    .map((line) => String(line.content || "").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join(" ; ");
+}
+
+function updatePracticeCurrentLyric(idx) {
+  if (!practiceCurrentLyricEl) return;
+  const safeIdx = clamp(Math.floor(ensureNumber(idx, 0)), 0, Math.max(0, lyrics.length - 1));
+  const current = lyrics[safeIdx];
+  practiceCurrentLyricEl.textContent = current?.content || "No active lyric";
+}
+
+function fitPracticeLyricsToBox() {
+  if (!practiceCompactLyricsEl) return;
+  const node = practiceCompactLyricsEl;
+  if (node.clientHeight <= 0 || node.clientWidth <= 0) return;
+
+  let lo = 8;
+  let hi = 34;
+  let best = 8;
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    node.style.fontSize = `${mid}px`;
+    if (node.scrollHeight <= node.clientHeight && node.scrollWidth <= node.clientWidth) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  node.style.fontSize = `${best}px`;
+}
+
+function schedulePracticeLyricsFit() {
+  if (!document.body.classList.contains("practice-mode")) return;
+  if (practiceFitRaf) cancelAnimationFrame(practiceFitRaf);
+  practiceFitRaf = requestAnimationFrame(() => {
+    practiceFitRaf = 0;
+    fitPracticeLyricsToBox();
+  });
+}
+
+function renderPracticeLyricsLayout() {
+  lyricsBox.innerHTML = "";
+  practiceCurrentLyricEl = null;
+  practiceCompactLyricsEl = null;
+
+  const wrap = document.createElement("div");
+  wrap.className = "practiceLyricsWrap";
+
+  const current = document.createElement("div");
+  current.className = "practiceCurrentLine";
+  current.textContent = lyrics[0]?.content || "No active lyric";
+
+  const all = document.createElement("div");
+  all.className = "practiceCompactLyrics";
+  all.textContent = getCompactLyricsText();
+
+  wrap.append(current, all);
+  lyricsBox.appendChild(wrap);
+  practiceCurrentLyricEl = current;
+  practiceCompactLyricsEl = all;
+  updatePracticeCurrentLyric(lastActiveIdx < 0 ? 0 : lastActiveIdx);
+  schedulePracticeLyricsFit();
+}
+
 function renderLyrics() {
   lyricsBox.innerHTML = "";
+  practiceCurrentLyricEl = null;
+  practiceCompactLyricsEl = null;
+
   if (!lyrics.length) {
     lyricsBox.innerHTML = '<div class="small">No lyrics loaded yet. Paste lyrics and click "Use pasted lyrics".</div>';
+    return;
+  }
+
+  if (document.body.classList.contains("practice-mode")) {
+    renderPracticeLyricsLayout();
     return;
   }
 
@@ -476,7 +556,12 @@ function renderLyrics() {
 }
 
 function setActiveLyricByTime(t) {
-  if (!lyrics.length || lyrics[0].t == null) return;
+  if (!lyrics.length) return;
+
+  if (lyrics[0].t == null) {
+    if (document.body.classList.contains("practice-mode")) updatePracticeCurrentLyric(0);
+    return;
+  }
 
   let lo = 0;
   let hi = lyrics.length - 1;
@@ -493,6 +578,12 @@ function setActiveLyricByTime(t) {
 
   if (ans < 0) ans = 0;
   if (ans === lastActiveIdx) return;
+
+  if (document.body.classList.contains("practice-mode")) {
+    updatePracticeCurrentLyric(ans);
+    lastActiveIdx = ans;
+    return;
+  }
 
   const prev = lyricsBox.querySelector(".line.active");
   if (prev) prev.classList.remove("active");
@@ -1799,6 +1890,10 @@ window.addEventListener("keydown", (e) => {
   if (section) {
     playSection(section, false);
   }
+});
+
+window.addEventListener("resize", () => {
+  schedulePracticeLyricsFit();
 });
 
 document.addEventListener("input", (evt) => {

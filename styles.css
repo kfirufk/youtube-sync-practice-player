@@ -1,13 +1,47 @@
 :root {
+  --bg-top: #0b0f14;
+  --bg-bottom: #0b1320;
+  --bg-radial-1: rgba(37, 99, 235, 0.2);
+  --bg-radial-2: rgba(20, 184, 166, 0.14);
+  --topbar-bg: rgba(11, 15, 20, 0.86);
+  --card: rgba(15, 23, 42, 0.88);
+  --card-border: rgba(79, 104, 138, 0.25);
+  --ink: #e6edf3;
+  --ink-soft: #9fb0c0;
+  --input-bg: rgba(11, 18, 32, 0.95);
+  --input-border: rgba(60, 83, 113, 0.5);
+  --btn-neutral: rgba(51, 65, 85, 0.94);
+  --icon-bg: rgba(17, 24, 39, 0.95);
+  --accent: #2563eb;
+  --accent-2: #1d4ed8;
+  --danger: #d35d66;
+  --line-active: #1d4ed8;
+  --marker-row: rgba(37, 99, 235, 0.12);
+  --modal-bg: rgba(15, 23, 42, 0.86);
+  --overlay-bg: rgba(5, 8, 14, 0.62);
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+}
+
+body[data-theme="light"] {
   --bg-top: #f4f1ea;
   --bg-bottom: #dfe8f2;
+  --bg-radial-1: rgba(15, 109, 122, 0.2);
+  --bg-radial-2: rgba(19, 71, 166, 0.16);
+  --topbar-bg: rgba(244, 241, 234, 0.75);
   --card: rgba(255, 255, 255, 0.82);
   --card-border: rgba(34, 50, 76, 0.18);
   --ink: #1b2433;
   --ink-soft: #5a667a;
+  --input-bg: rgba(255, 255, 255, 0.92);
+  --input-border: rgba(34, 50, 76, 0.18);
+  --btn-neutral: #5e6b83;
+  --icon-bg: rgba(27, 36, 51, 0.86);
   --accent: #0f6d7a;
   --accent-2: #1347a6;
-  --danger: #9a2c34;
+  --line-active: #113f95;
+  --marker-row: rgba(15, 109, 122, 0.08);
+  --modal-bg: #f8fbff;
+  --overlay-bg: rgba(16, 22, 34, 0.55);
   --shadow: 0 12px 30px rgba(23, 37, 64, 0.12);
 }
 
@@ -21,8 +55,8 @@ body {
   font-family: "Space Grotesk", "Avenir Next", "Helvetica Neue", sans-serif;
   color: var(--ink);
   background:
-    radial-gradient(1200px 600px at 8% -10%, rgba(15, 109, 122, 0.2), transparent 70%),
-    radial-gradient(1000px 500px at 100% 0%, rgba(19, 71, 166, 0.16), transparent 70%),
+    radial-gradient(1200px 600px at 8% -10%, var(--bg-radial-1), transparent 70%),
+    radial-gradient(1000px 500px at 100% 0%, var(--bg-radial-2), transparent 70%),
     linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
 }
 
@@ -36,8 +70,8 @@ body {
   gap: 12px;
   padding: 14px 16px;
   backdrop-filter: blur(12px);
-  background: rgba(244, 241, 234, 0.75);
-  border-bottom: 1px solid rgba(34, 50, 76, 0.15);
+  background: var(--topbar-bg);
+  border-bottom: 1px solid var(--card-border);
 }
 
 h1 {
@@ -60,6 +94,17 @@ h2 {
 .topActions {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.modeBtn {
+  background: var(--btn-neutral);
+  color: #fff;
+  min-width: 108px;
+  height: 40px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
 }
 
 .configPanel {
@@ -119,8 +164,8 @@ input[type="number"],
 textarea,
 select {
   width: 100%;
-  border: 1px solid rgba(34, 50, 76, 0.18);
-  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
   border-radius: 12px;
   padding: 10px 11px;
   color: var(--ink);
@@ -154,7 +199,7 @@ button:disabled {
 }
 
 button.secondary {
-  background: #5e6b83;
+  background: var(--btn-neutral);
 }
 
 button.primary {
@@ -171,7 +216,7 @@ button.primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(27, 36, 51, 0.86);
+  background: var(--icon-bg);
   color: #fff;
 }
 
@@ -217,7 +262,7 @@ button.primary {
   border-radius: 16px;
   overflow: hidden;
   background: #101622;
-  border: 1px solid rgba(34, 50, 76, 0.24);
+  border: 1px solid var(--card-border);
   box-shadow: var(--shadow);
 }
 
@@ -281,8 +326,8 @@ input[type="range"] {
 .lyricsBox {
   height: min(42vh, 440px);
   border-radius: 14px;
-  border: 1px solid rgba(34, 50, 76, 0.2);
-  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--card-border);
+  background: var(--input-bg);
   overflow: auto;
   padding: 10px;
 }
@@ -298,7 +343,7 @@ body.lyrics-focus .lyricsBox {
 }
 
 .line.active {
-  background: #113f95;
+  background: var(--line-active);
   color: #fff;
 }
 
@@ -307,7 +352,7 @@ body.lyrics-focus .lyricsBox {
 }
 
 .markersList {
-  border: 1px dashed rgba(34, 50, 76, 0.24);
+  border: 1px dashed var(--card-border);
   border-radius: 12px;
   padding: 8px;
   margin-top: 10px;
@@ -325,7 +370,7 @@ body.lyrics-focus .lyricsBox {
 }
 
 .markerRow:nth-child(odd) {
-  background: rgba(15, 109, 122, 0.08);
+  background: var(--marker-row);
 }
 
 .markerMeta {
@@ -341,7 +386,7 @@ body.lyrics-focus .lyricsBox {
 }
 
 .markerActions button {
-  background: rgba(34, 50, 76, 0.86);
+  background: var(--icon-bg);
   padding: 6px 8px;
   font-size: 0.76rem;
   border-radius: 8px;
@@ -353,7 +398,7 @@ body.lyrics-focus .lyricsBox {
   z-index: 50;
   display: grid;
   place-items: center;
-  background: rgba(16, 22, 34, 0.58);
+  background: var(--overlay-bg);
   backdrop-filter: blur(4px);
 }
 
@@ -377,7 +422,7 @@ body.lyrics-focus .lyricsBox {
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(16, 22, 34, 0.55);
+  background: var(--overlay-bg);
   display: grid;
   place-items: center;
   padding: 12px;
@@ -387,7 +432,7 @@ body.lyrics-focus .lyricsBox {
   width: min(680px, 100%);
   border-radius: 16px;
   border: 1px solid var(--card-border);
-  background: #f8fbff;
+  background: var(--modal-bg);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
   padding: 14px;
 }
@@ -410,7 +455,7 @@ body.lyrics-focus .lyricsBox {
   gap: 12px;
   border-radius: 10px;
   padding: 8px;
-  background: rgba(15, 109, 122, 0.09);
+  background: var(--marker-row);
 }
 
 .hidden {

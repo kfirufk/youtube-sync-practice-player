@@ -7,6 +7,8 @@ const PAUSE_ICON_PATH = "M6 5h4v14H6zm8 0h4v14h-4z";
 const MUTE_ICON_PATH = "M5 9v6h4l5 5V4L9 9Zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4";
 const UNMUTE_ICON_PATH = "M5 9v6h4l5 5V4L9 9Zm9.6 3 2.4 2.4 1.4-1.4-2.4-2.4 2.4-2.4-1.4-1.4-2.4 2.4-2.4-2.4-1.4 1.4 2.4 2.4-2.4 2.4 1.4 1.4z";
 const MARKER_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+const THEME_MODES = ["system", "dark", "light"];
+const THEME_STORAGE_KEY = "practice-player-theme-mode";
 
 // --- Helpers ---
 function extractYouTubeId(url) {
@@ -78,6 +80,7 @@ let syncTimer = null;
 let lastPianoCorrectionAt = 0;
 let countdownTimer = null;
 let ytApiPromise = null;
+let prefersSchemeMql = null;
 
 let lyrics = [];
 let lastActiveIdx = -1;
@@ -104,6 +107,7 @@ const muteIconPath = el("muteIconPath");
 const countdownOverlay = el("countdownOverlay");
 const countdownValue = el("countdownValue");
 const shortcutsBtn = el("shortcutsBtn");
+const themeBtn = el("themeBtn");
 const shortcutsModal = el("shortcutsModal");
 const closeShortcutsBtn = el("closeShortcutsBtn");
 const shortcutsList = el("shortcutsList");
@@ -119,6 +123,81 @@ const markersList = el("markersList");
 
 function setPresetStatus(text) {
   presetStatus.textContent = text || "";
+}
+
+function getSystemThemeSafe() {
+  try {
+    if (window.matchMedia) {
+      const isLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+      return isLight ? "light" : "dark";
+    }
+  } catch {
+    // Ignore and use dark fallback.
+  }
+  return "dark";
+}
+
+function resolveTheme(mode) {
+  if (mode === "light" || mode === "dark") return mode;
+  return getSystemThemeSafe();
+}
+
+function updateThemeButtonLabel(mode, resolvedTheme) {
+  const mapping = {
+    system: "Auto",
+    dark: "Dark",
+    light: "Light"
+  };
+  themeBtn.textContent = `Theme: ${mapping[mode] || "Auto"}`;
+  themeBtn.title = `Theme mode (${mapping[mode] || "Auto"}, active: ${resolvedTheme})`;
+}
+
+function applyTheme(mode, persist = true) {
+  const safeMode = THEME_MODES.includes(mode) ? mode : "system";
+  const resolvedTheme = resolveTheme(safeMode);
+  document.body.dataset.themeMode = safeMode;
+  document.body.dataset.theme = resolvedTheme;
+  updateThemeButtonLabel(safeMode, resolvedTheme);
+
+  if (persist) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, safeMode);
+    } catch {
+      // Ignore storage failures.
+    }
+  }
+}
+
+function nextThemeMode(currentMode) {
+  const idx = THEME_MODES.indexOf(currentMode);
+  const nextIdx = idx === -1 ? 0 : (idx + 1) % THEME_MODES.length;
+  return THEME_MODES[nextIdx];
+}
+
+function initTheme() {
+  let savedMode = "system";
+  try {
+    const fromStorage = localStorage.getItem(THEME_STORAGE_KEY);
+    if (THEME_MODES.includes(fromStorage)) savedMode = fromStorage;
+  } catch {
+    savedMode = "system";
+  }
+
+  applyTheme(savedMode, false);
+
+  if (window.matchMedia) {
+    prefersSchemeMql = window.matchMedia("(prefers-color-scheme: light)");
+    const onSystemChange = () => {
+      if (document.body.dataset.themeMode === "system") {
+        applyTheme("system", false);
+      }
+    };
+    if (typeof prefersSchemeMql.addEventListener === "function") {
+      prefersSchemeMql.addEventListener("change", onSystemChange);
+    } else if (typeof prefersSchemeMql.addListener === "function") {
+      prefersSchemeMql.addListener(onSystemChange);
+    }
+  }
 }
 
 function setConfigCollapsed(collapsed) {
@@ -768,6 +847,10 @@ scrubber.addEventListener("touchend", () => {
 });
 
 shortcutsBtn.addEventListener("click", openShortcuts);
+themeBtn.addEventListener("click", () => {
+  const currentMode = document.body.dataset.themeMode || "system";
+  applyTheme(nextThemeMode(currentMode), true);
+});
 closeShortcutsBtn.addEventListener("click", closeShortcuts);
 shortcutsModal.addEventListener("click", (evt) => {
   if (evt.target === shortcutsModal) closeShortcuts();
@@ -848,6 +931,7 @@ window.addEventListener("keydown", (e) => {
 
 // --- Init ---
 populateMarkerKeys();
+initTheme();
 setConfigCollapsed(false);
 disableTransport();
 renderLyrics();

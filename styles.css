@@ -334,6 +334,10 @@ input[type="range"] {
   width: 86px;
 }
 
+#metronomeBeatsPerBar {
+  width: 72px;
+}
+
 .loopStatus {
   padding: 8px 10px;
   border-radius: 10px;

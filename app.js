@@ -123,6 +123,7 @@ class MetronomeEngine {
   constructor() {
     this.enabled = false;
     this.bpm = 92;
+    this.beatsPerBar = 4;
     this.timer = null;
     this.audioCtx = null;
     this.beatIndex = 0;
@@ -139,6 +140,11 @@ class MetronomeEngine {
       this.stop();
       this.start();
     }
+  }
+
+  setBeatsPerBar(beats) {
+    this.beatsPerBar = clamp(Math.round(ensureNumber(beats, 4)), 1, 12);
+    this.beatIndex = 0;
   }
 
   ensureContext() {
@@ -159,7 +165,7 @@ class MetronomeEngine {
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    const accent = this.beatIndex % 4 === 0;
+    const accent = this.beatIndex % this.beatsPerBar === 0;
 
     osc.type = "square";
     osc.frequency.setValueAtTime(accent ? 1260 : 840, ctx.currentTime);
@@ -218,7 +224,6 @@ let countdownTimer = null;
 let ytApiPromise = null;
 let prefersSchemeMql = null;
 let autosaveTimer = null;
-let didRestoreDraft = false;
 let isPreparingPlayers = false;
 let lastPlayRequestAt = 0;
 
@@ -299,6 +304,7 @@ const loopRepeatsInput = el("loopRepeats");
 const loopStatus = el("loopStatus");
 
 const metronomeBpm = el("metronomeBpm");
+const metronomeBeatsPerBar = el("metronomeBeatsPerBar");
 const toggleMetronomeBtn = el("toggleMetronomeBtn");
 const resyncBtn = el("resyncBtn");
 
@@ -1228,13 +1234,11 @@ function resyncNow() {
 // --- Presets ---
 function renderPresetSelect() {
   presetSelect.innerHTML = "";
-  if (!appState.songs.length) {
-    const opt = document.createElement("option");
-    opt.value = "";
-    opt.textContent = "No presets loaded";
-    presetSelect.appendChild(opt);
-    return;
-  }
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = appState.songs.length ? "Select preset..." : "No presets loaded";
+  presetSelect.appendChild(placeholder);
+  if (!appState.songs.length) return;
 
   appState.songs.forEach((song, idx) => {
     const opt = document.createElement("option");
@@ -1255,8 +1259,15 @@ function applyPreset(song) {
   el("countdownSec").value = String(Math.max(0, Math.floor(ensureNumber(song.countdownSec, 4))));
 
   const bpm = clamp(Math.round(ensureNumber(song.metronomeBpm, 92)), 30, 300);
+  const beatsPerBar = clamp(
+    Math.round(ensureNumber(song.metronomeBeatsPerBar ?? song.metronomeBeats ?? 4, 4)),
+    1,
+    12
+  );
   metronomeBpm.value = String(bpm);
+  metronomeBeatsPerBar.value = String(beatsPerBar);
   metronome.setBpm(bpm);
+  metronome.setBeatsPerBar(beatsPerBar);
 
   const rawLyrics = String(song.lyrics || "");
   el("lyricsPaste").value = rawLyrics;
@@ -1295,6 +1306,7 @@ function exportCurrentPreset() {
     pianoStartSec: ensureNumber(el("pianoOffset").value, 0),
     countdownSec: Math.max(0, Math.floor(ensureNumber(el("countdownSec").value, 0))),
     metronomeBpm: clamp(Math.round(ensureNumber(metronomeBpm.value, 92)), 30, 300),
+    metronomeBeatsPerBar: clamp(Math.round(ensureNumber(metronomeBeatsPerBar.value, 4)), 1, 12),
     loopRepeatTarget: Math.max(0, Math.floor(ensureNumber(loopRepeatsInput.value, 4))),
     lyrics: el("lyricsPaste").value.trim(),
     markers: appState.markers.map((m) => ({
@@ -1331,10 +1343,7 @@ async function loadSongs() {
   }
 
   renderPresetSelect();
-  if (appState.songs.length && !didRestoreDraft) {
-    presetSelect.value = "0";
-    applyPreset(appState.songs[0]);
-  }
+  presetSelect.value = "";
 }
 
 // --- Autosave draft/recovery ---
@@ -1352,6 +1361,7 @@ function collectDraftState() {
       lyricsPaste: el("lyricsPaste").value,
       loopRepeats: loopRepeatsInput.value,
       metronomeBpm: metronomeBpm.value,
+      metronomeBeatsPerBar: metronomeBeatsPerBar.value,
       themeMode: document.body.dataset.themeMode || "system"
     },
     markers: appState.markers,
@@ -1363,7 +1373,7 @@ function collectDraftState() {
       repeatTarget: appState.loop.repeatTarget,
       enabled: appState.loop.enabled
     },
-    metronomeEnabled: metronome.enabled
+      metronomeEnabled: metronome.enabled
   };
 }
 
@@ -1395,6 +1405,7 @@ function restoreDraft() {
     if (typeof f.lyricsPaste === "string") el("lyricsPaste").value = f.lyricsPaste;
     if (typeof f.loopRepeats === "string") loopRepeatsInput.value = f.loopRepeats;
     if (typeof f.metronomeBpm === "string") metronomeBpm.value = f.metronomeBpm;
+    if (typeof f.metronomeBeatsPerBar === "string") metronomeBeatsPerBar.value = f.metronomeBeatsPerBar;
 
     if (THEME_MODES.includes(f.themeMode)) applyTheme(f.themeMode, false);
 
@@ -1425,6 +1436,7 @@ function restoreDraft() {
     }
 
     metronome.setBpm(clamp(Math.round(ensureNumber(metronomeBpm.value, 92)), 30, 300));
+    metronome.setBeatsPerBar(clamp(Math.round(ensureNumber(metronomeBeatsPerBar.value, 4)), 1, 12));
     metronome.setEnabled(Boolean(draft.metronomeEnabled));
 
     lyrics = el("lyricsPaste").value.trim() ? parseLRC(el("lyricsPaste").value.trim()) : [];
@@ -1436,7 +1448,6 @@ function restoreDraft() {
     renderLoopStatus();
     setMetronomeButtonLabel();
 
-    didRestoreDraft = true;
     setPresetStatus("Recovered previous draft from autosave.");
     return true;
   } catch {
@@ -1600,6 +1611,7 @@ function setMetronomeButtonLabel() {
 
 function toggleMetronome() {
   metronome.setBpm(ensureNumber(metronomeBpm.value, 92));
+  metronome.setBeatsPerBar(ensureNumber(metronomeBeatsPerBar.value, 4));
   metronome.setEnabled(!metronome.enabled);
   metronome.syncWithPlayback(isSyncing);
   setMetronomeButtonLabel();
@@ -1692,6 +1704,13 @@ metronomeBpm.addEventListener("change", () => {
   const bpm = clamp(Math.round(ensureNumber(metronomeBpm.value, 92)), 30, 300);
   metronomeBpm.value = String(bpm);
   metronome.setBpm(bpm);
+  scheduleAutosave();
+});
+
+metronomeBeatsPerBar.addEventListener("change", () => {
+  const beats = clamp(Math.round(ensureNumber(metronomeBeatsPerBar.value, 4)), 1, 12);
+  metronomeBeatsPerBar.value = String(beats);
+  metronome.setBeatsPerBar(beats);
   scheduleAutosave();
 });
 
@@ -1809,5 +1828,5 @@ renderLoopStatus();
 renderDiagnostics();
 updateMuteIcon();
 setMetronomeButtonLabel();
-restoreDraft();
+metronome.setBeatsPerBar(clamp(Math.round(ensureNumber(metronomeBeatsPerBar.value, 4)), 1, 12));
 loadSongs();

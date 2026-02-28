@@ -22,11 +22,20 @@ This app is focused on that workflow.
 ## Features
 - Single master timeline controlling both videos in sync
 - Configurable offsets (`songStartSec`, `pianoStartSec`)
+- One-click offset calibration from current frames
 - Manual lyrics (plain text or LRC timestamps)
 - Timeline labels with keyboard shortcuts (`1`-`9`)
+- Section manager (ranges) with optional section shortcuts
+- Start-from-here practice (`start -> end` supported)
+- A/B loop training with repeat count (`0 = infinite`)
+- Live metronome with BPM control
 - Label source selection per marker (`song` or `piano` timeline)
 - Configurable play countdown before playback starts
 - Keyboard shortcuts modal (`?`)
+- Shortcut remapping (saved locally)
+- Autosave + recovery draft on reload
+- Diagnostics panel (drift, corrections, buffering, loop cycles)
+- Fullscreen practice mode with all-lyrics poster layout
 - JSON preset export (copy into `songs.json`)
 - Cleaner icon-based transport controls
 
@@ -65,10 +74,16 @@ Each preset object can include:
   "songStartSec": 0,
   "pianoStartSec": 4.8,
   "countdownSec": 4,
+  "metronomeBpm": 92,
+  "loopRepeatTarget": 4,
   "lyrics": "...plain or LRC...",
   "markers": [
     { "key": "1", "name": "Intro", "source": "song", "timeSec": 42.3 },
     { "key": "2", "name": "Chorus", "source": "piano", "timeSec": 58.5 }
+  ],
+  "sections": [
+    { "name": "Verse 1", "color": "#2f7cff", "startSec": 34, "endSec": 64, "repeatCount": 4, "shortcut": "Z" },
+    { "name": "Solo", "color": "#eb5b2f", "startSec": 120, "endSec": null, "repeatCount": 0, "shortcut": "" }
   ]
 }
 ```

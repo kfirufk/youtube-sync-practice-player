@@ -219,7 +219,6 @@ let ytApiPromise = null;
 let prefersSchemeMql = null;
 let autosaveTimer = null;
 let didRestoreDraft = false;
-let lastInternalSeekAt = 0;
 
 let lyrics = [];
 let lastActiveIdx = -1;
@@ -968,7 +967,6 @@ function safeSeekBoth(masterTime, seekAhead = true) {
   const songTime = t + songStartSec;
   const pianoTime = t + pianoStartSec;
 
-  lastInternalSeekAt = Date.now();
   songPlayer.seekTo(songTime, seekAhead);
   pianoPlayer.seekTo(pianoTime, seekAhead);
   setTransportTime(t);
@@ -1444,51 +1442,28 @@ function restoreDraft() {
 }
 
 // --- YouTube API and player lifecycle ---
-function syncFromPlayerTarget(targetPlayer) {
-  if (!canSync() || !targetPlayer?.getCurrentTime) return;
-  if (Date.now() - lastInternalSeekAt < 240) return;
-
-  const fromSong = targetPlayer === songPlayer;
-  const baseTime = ensureNumber(targetPlayer.getCurrentTime(), 0);
-  const master = fromSong
-    ? Math.max(0, baseTime - songStartSec)
-    : Math.max(0, baseTime - pianoStartSec);
-
-  safeSeekBoth(master, true);
-}
-
 function onPlayerStateChange(evt) {
   if (!canSync()) return;
 
   const stateCode = evt?.data;
-  const targetPlayer = evt?.target;
 
   if (stateCode === YT.PlayerState.BUFFERING) {
     appState.diagnostics.bufferingEvents += 1;
     renderDiagnostics();
-    return;
   }
 
-  if (stateCode === YT.PlayerState.PLAYING) {
-    syncFromPlayerTarget(targetPlayer);
-    if (songPlayer.getPlayerState?.() !== YT.PlayerState.PLAYING) songPlayer.playVideo();
-    if (pianoPlayer.getPlayerState?.() !== YT.PlayerState.PLAYING) pianoPlayer.playVideo();
+  if (stateCode === YT.PlayerState.PLAYING && !isSyncing) {
     setSyncing(true);
     return;
   }
 
-  if (stateCode === YT.PlayerState.PAUSED) {
-    syncFromPlayerTarget(targetPlayer);
-    songPlayer.pauseVideo();
-    pianoPlayer.pauseVideo();
-    setSyncing(false);
-    return;
-  }
-
-  if (stateCode === YT.PlayerState.ENDED) {
-    songPlayer.pauseVideo();
-    pianoPlayer.pauseVideo();
-    setSyncing(false);
+  if (stateCode === YT.PlayerState.PAUSED || stateCode === YT.PlayerState.ENDED) {
+    const songState = songPlayer.getPlayerState?.();
+    const pianoState = pianoPlayer.getPlayerState?.();
+    const eitherPlaying = songState === YT.PlayerState.PLAYING || pianoState === YT.PlayerState.PLAYING;
+    if (!eitherPlaying && isSyncing) {
+      setSyncing(false);
+    }
   }
 }
 

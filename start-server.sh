@@ -1,21 +1,27 @@
 #!/bin/bash
-set -e  # Stop on error
+set -euo pipefail
 
-# Get the directory of this script
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SERVER_PID=""
 
-# Start Python HTTP server in background
+cleanup() {
+  if [[ -n "${SERVER_PID:-}" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
+    echo
+    echo "Stopping Python server (PID $SERVER_PID)..."
+    kill "$SERVER_PID" 2>/dev/null || true
+    wait "$SERVER_PID" 2>/dev/null || true
+  fi
+}
+
+trap cleanup INT TERM EXIT
+
 cd "$ROOT"
 python3 -m http.server 8028 &
-
-# Save PID (optional, useful if you want to stop it later)
 SERVER_PID=$!
 
-# Wait 1 second
 sleep 1
-
-# Open default browser
 open "http://localhost:8028/index.html"
 
-# Optional: wait so script doesn't exit immediately
-# wait $SERVER_PID
+echo "Server running at http://localhost:8028 (PID $SERVER_PID)"
+echo "Press Ctrl-C to stop."
+wait "$SERVER_PID"

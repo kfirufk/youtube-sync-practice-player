@@ -480,8 +480,8 @@ function fitPracticeLyricsToBox() {
   const node = practiceCompactLyricsEl;
   if (node.clientHeight <= 0 || node.clientWidth <= 0) return;
 
-  let lo = 8;
-  let hi = 34;
+  let lo = 7;
+  let hi = 22;
   let best = 8;
   while (lo <= hi) {
     const mid = Math.floor((lo + hi) / 2);

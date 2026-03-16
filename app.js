@@ -36,6 +36,19 @@ function extractYouTubeId(url) {
   }
 }
 
+function getYouTubeInputIssue(label, rawUrl) {
+  const value = String(rawUrl || "").trim();
+  if (!value) {
+    return `${label} URL is empty. Select a preset to auto-fill it, or paste a full YouTube link.`;
+  }
+
+  if (!extractYouTubeId(value)) {
+    return `${label} URL could not be parsed as a YouTube link:\n${value}`;
+  }
+
+  return "";
+}
+
 function fmtTime(sec) {
   const safe = Math.max(0, Number(sec) || 0);
   const m = Math.floor(safe / 60);
@@ -1386,6 +1399,7 @@ function applyPreset(song) {
 
   renderShortcutsList();
   scheduleAutosave();
+  setPresetStatus(`Applied preset: ${song.name || "Untitled preset"}.`);
 }
 
 function exportCurrentPreset() {
@@ -1598,13 +1612,18 @@ function ensureYTApi() {
 async function loadPlayers() {
   readOffsets();
 
-  const pianoId = extractYouTubeId(el("pianoUrl").value);
-  const songId = extractYouTubeId(el("songUrl").value);
+  const songUrl = el("songUrl").value;
+  const pianoUrl = el("pianoUrl").value;
+  const songIssue = getYouTubeInputIssue("Official clip", songUrl);
+  const pianoIssue = getYouTubeInputIssue("Tutorial", pianoUrl);
 
-  if (!pianoId || !songId) {
-    alert("Could not parse one of the YouTube URLs.");
+  if (songIssue || pianoIssue) {
+    alert([songIssue, pianoIssue].filter(Boolean).join("\n\n"));
     return;
   }
+
+  const pianoId = extractYouTubeId(pianoUrl);
+  const songId = extractYouTubeId(songUrl);
 
   await ensureYTApi();
 
@@ -1721,6 +1740,13 @@ el("usePastedBtn").addEventListener("click", usePastedLyrics);
 el("exportPresetBtn").addEventListener("click", exportCurrentPreset);
 
 el("applyPresetBtn").addEventListener("click", () => {
+  const idx = Number.parseInt(presetSelect.value, 10);
+  if (Number.isFinite(idx) && appState.songs[idx]) {
+    applyPreset(appState.songs[idx]);
+  }
+});
+
+presetSelect.addEventListener("change", () => {
   const idx = Number.parseInt(presetSelect.value, 10);
   if (Number.isFinite(idx) && appState.songs[idx]) {
     applyPreset(appState.songs[idx]);

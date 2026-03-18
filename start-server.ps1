@@ -1,11 +1,21 @@
 ﻿$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$config = Join-Path $root "config.yaml"
 
-# Start the Python HTTP server in this folder
-Start-Process -FilePath "python" -ArgumentList "-m", "http.server", "8000" -WorkingDirectory $root
+if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
+  Write-Error "Go is not installed or not on PATH."
+}
 
-Start-Sleep -Seconds 1
+if (-not (Test-Path $config)) {
+  Copy-Item (Join-Path $root "config.example.yaml") $config
+  Write-Host "Created config.yaml from config.example.yaml."
+  Write-Host "Update the database credentials, then run the script again."
+  exit 1
+}
 
-# Open default browser to index.html
-Start-Process "http://localhost:8000/index.html"
+Start-Process -FilePath "go" -ArgumentList "run", ".", "-config", $config -WorkingDirectory $root
+
+Start-Sleep -Seconds 2
+
+Start-Process "http://localhost:8028/"

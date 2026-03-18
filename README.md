@@ -1,104 +1,48 @@
 # Practice Sync Player
 
-A fast two-video practice player for guitar, piano, or vocals.
+A Go + PostgreSQL practice player for syncing a tutorial video and an official clip on one shared timeline.
 
-Load:
-- one **tutorial** video (muted/unmuted on demand)
-- one **official clip** video
+## What changed
 
-Then control both with a single timeline so you can practice difficult sections repeatedly.
+- Songs now load from PostgreSQL through a Go server instead of being fetched directly from inline JSON.
+- `db/patches/*.sql` are applied automatically on startup.
+- `config.yaml` holds the server, PostgreSQL, Supabase, and site settings.
+- Supabase handles email/password login for the browser UI.
+- User defaults like shortcut mappings and fullscreen behavior are stored in the authenticated user profile.
+- The public lobby shows published songs first, while editing/publishing is limited to logged-in owners.
 
-Built with vanilla HTML/CSS/JavaScript and YouTube IFrame API.
+## Stack
 
-## Why this exists
-When practicing an instrument, you often need:
-- tutorial fingering + original song feel
-- exact timeline sync with custom offsets
-- jump points for tricky sections
-- lyrics visible while playing
+- Go HTTP server
+- PostgreSQL
+- Vanilla HTML / CSS / JavaScript
+- YouTube IFrame API
+- Supabase auth (email/password)
 
-This app is focused on that workflow.
+## Local setup
 
-## Features
-- Single master timeline controlling both videos in sync
-- Configurable offsets (`songStartSec`, `pianoStartSec`)
-- One-click offset calibration from current frames
-- Manual lyrics (plain text or LRC timestamps)
-- Timeline labels with keyboard shortcuts (`1`-`9`)
-- Section manager (ranges) with optional section shortcuts
-- Start-from-here practice (`start -> end` supported)
-- A/B loop training with repeat count (`0 = infinite`)
-- Live metronome with BPM control
-- Label source selection per marker (`song` or `piano` timeline)
-- Configurable play countdown before playback starts
-- Keyboard shortcuts modal (`?`)
-- Shortcut remapping (saved locally)
-- Autosave + recovery draft on reload
-- Diagnostics panel (drift, corrections, buffering, loop cycles)
-- Fullscreen practice mode with all-lyrics poster layout
-- JSON preset export (copy into `songs.json`)
-- Cleaner icon-based transport controls
-
-## Keyboard shortcuts
-- `Space` / `K`: play/pause
-- `R`: back to start
-- `M`: mute/unmute tutorial
-- `Left` / `Right`: seek -5 / +5 sec
-- `1`-`9`: jump to timeline labels
-- `L`: lyrics focus mode
-- `?`: open/close shortcuts panel
-
-## Run locally
-Use any local server. Example:
+1. Install Go and PostgreSQL.
+2. Create a database that matches the `database` section in `config.yaml`.
+3. Edit `config.yaml` with your real PostgreSQL credentials.
+4. Run:
 
 ```bash
 ./start-server.sh
 ```
 
-Then open:
+The Go server applies any new SQL patches from `db/patches/` before it starts serving the app.
 
-```text
-http://localhost:8000
-```
+## Important files
 
-If you open `index.html` directly from disk, `songs.json` loading may fail due to browser restrictions.
+- `main.go`: HTTP server, API routes, and static-file serving
+- `store.go`: PostgreSQL access
+- `seed.go`: one-time import of the legacy Rihanna seed into PostgreSQL
+- `config.yaml`: local runtime configuration
+- `db/patches/001_initial_schema.sql`: initial schema patch
+- `index.html`, `styles.css`, `app.js`: browser UI
 
-## Preset format (`songs.json`)
-Each preset object can include:
+## Auth note
 
-```json
-{
-  "name": "Song - Practice",
-  "songUrl": "https://www.youtube.com/watch?v=...",
-  "pianoUrl": "https://www.youtube.com/watch?v=...",
-  "songStartSec": 0,
-  "pianoStartSec": 4.8,
-  "countdownSec": 4,
-  "metronomeBpm": 92,
-  "loopRepeatTarget": 4,
-  "lyrics": "...plain or LRC...",
-  "markers": [
-    { "key": "1", "name": "Intro", "source": "song", "timeSec": 42.3 },
-    { "key": "2", "name": "Chorus", "source": "piano", "timeSec": 58.5 }
-  ],
-  "sections": [
-    { "name": "Verse 1", "color": "#2f7cff", "startSec": 34, "endSec": 64, "repeatCount": 4, "shortcut": "Z" },
-    { "name": "Solo", "color": "#eb5b2f", "startSec": 120, "endSec": null, "repeatCount": 0, "shortcut": "" }
-  ]
-}
-```
+Supabase is used only for authentication. Song data and user profile defaults live in your PostgreSQL database.
 
-Notes:
-- `source: "song"` means `timeSec` is measured on the official clip timeline.
-- `source: "piano"` means `timeSec` is measured on the tutorial timeline.
-- `key` should be one of `"1"` to `"9"`.
-
-## Tech
-- Vanilla HTML/CSS/JavaScript
-- YouTube IFrame API
-
-## Credits
-This project was iterated and improved with help from **ChatGPT Codex app**.
-
-## License
-MIT (see [LICENSE](LICENSE)).
+Self-serve account deletion requires a Supabase service role key in `config.yaml`. Without that key, the UI explains that deletion is not yet enabled server-side.

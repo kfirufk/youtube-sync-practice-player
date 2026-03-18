@@ -3,293 +3,433 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Practice Sync Player</title>
+  <meta name="color-scheme" content="dark light" />
+  <title>sync.tvguitar.com | Practice Sync Player</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<header class="topbar">
-  <div>
-    <h1>Practice Sync Player</h1>
-    <p class="subtitle">Sync tutorial and official clip on one timeline.</p>
-  </div>
-  <div class="topActions">
+<header class="siteHeader">
+  <a class="brand" href="#top">
+    <span class="brandDot"></span>
+    <span>
+      <strong>sync.tvguitar.com</strong>
+      <small>Practice sync player</small>
+    </span>
+  </a>
+
+  <nav class="headerNav">
+    <a href="#lobbySection">Songs</a>
+    <a href="#workspaceSection">Workspace</a>
+    <a href="/privacy.html">Privacy</a>
+  </nav>
+
+  <div class="headerActions">
+    <span id="authIndicator" class="authIndicator" data-state="guest">Guest</span>
     <button id="themeBtn" class="modeBtn" type="button" title="Theme mode">Theme: Auto</button>
-    <button id="shortcutsBtn" class="iconBtn" type="button" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Zm0 2v8h16V8Zm2 2h2v2H6Zm3 0h2v2H9Zm3 0h2v2h-2Zm3 0h3v2h-3ZM6 13h8v2H6Z"/></svg>
-    </button>
-    <button id="toggleConfigBtn" class="iconBtn" type="button" aria-expanded="true" title="Collapse setup" aria-label="Collapse setup">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 14 5-5 5 5-1.4 1.4-3.6-3.6-3.6 3.6z"/></svg>
-    </button>
+    <button id="openShortcutsBtn" class="secondary" type="button">Shortcuts</button>
+    <button id="loginBtn" class="secondary" type="button">Log in</button>
+    <button id="signupBtn" class="primary" type="button">Sign up</button>
+    <button id="profileBtn" class="secondary hidden" type="button">Profile</button>
+    <button id="logoutBtn" class="secondary hidden" type="button">Log out</button>
   </div>
 </header>
 
-<section id="configPanel" class="configPanel">
-  <div class="panelGrid">
-    <div class="card">
-      <h2>Setup</h2>
-      <label for="presetSelect">Preset</label>
-      <div class="row tight">
-        <select id="presetSelect"></select>
-        <button id="applyPresetBtn" class="secondary" type="button">Apply</button>
+<main class="page">
+  <section class="heroPanel">
+    <div class="heroCopy">
+      <p class="eyebrow">Dual-video practice without losing your place</p>
+      <h1>Practice with the tutorial, the official clip, and your own jump labels on one timeline.</h1>
+      <p class="heroText">
+        Browse public sync songs from the lobby, jump into fullscreen practice automatically when you hit play,
+        and keep your shortcut legend visible next to the lyrics so you never have to guess mid-session.
+      </p>
+      <div class="heroActions">
+        <a class="primary heroLink" href="#lobbySection">Browse songs</a>
+        <button id="heroCreateSongBtn" class="secondary" type="button">Create a new sync</button>
       </div>
+    </div>
 
-      <label for="presetName">Preset name</label>
-      <input id="presetName" type="text" placeholder="Song - Practice" />
+    <div class="heroInfo card">
+      <p class="heroCardEyebrow">What’s new</p>
+      <ul class="heroChecklist">
+        <li>PostgreSQL-backed song data served by Go</li>
+        <li>Supabase email/password login with live auth status</li>
+        <li>Fullscreen practice helper with jump-key legend</li>
+        <li>Profile-synced defaults for shortcuts and practice settings</li>
+      </ul>
+      <p id="bootstrapStatus" class="small muted">Loading app configuration…</p>
+    </div>
+  </section>
 
-      <label for="songUrl">Official clip URL</label>
-      <input id="songUrl" type="text" placeholder="https://www.youtube.com/watch?v=..." />
-
-      <div class="row cols2">
-        <div>
-          <label for="songOffset">Official starts at (sec)</label>
-          <input id="songOffset" type="number" step="0.1" value="0" />
-        </div>
-        <div>
-          <label for="countdownSec">Play countdown (sec)</label>
-          <select id="countdownSec">
-            <option value="0">Off</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4" selected>4</option>
-            <option value="5">5</option>
-            <option value="8">8</option>
-          </select>
-        </div>
+  <section id="lobbySection" class="panelSection">
+    <div class="sectionHeader">
+      <div>
+        <p class="eyebrow">Lobby</p>
+        <h2>Public sync songs</h2>
+        <p class="muted">Guests can browse and practice. Logged-in users can publish new songs and update the ones they own.</p>
       </div>
+      <div class="sectionActions">
+        <input id="songSearch" type="search" placeholder="Search title, artist, or summary" />
+        <button id="createSongBtn" class="primary" type="button">New song</button>
+      </div>
+    </div>
+    <div id="lobbyGrid" class="lobbyGrid"></div>
+  </section>
 
-      <label for="pianoUrl">Tutorial URL</label>
-      <input id="pianoUrl" type="text" placeholder="https://www.youtube.com/watch?v=..." />
-
-      <label for="pianoOffset">Tutorial starts at (sec)</label>
-      <input id="pianoOffset" type="number" step="0.1" value="0" />
-
-      <div class="row">
+  <section id="workspaceSection" class="panelSection workspaceSection">
+    <div class="workspaceHeader">
+      <div>
+        <p id="editorModeBadge" class="eyebrow">Workspace</p>
+        <h2 id="workspaceTitle">Select a song or start a new draft</h2>
+        <p id="editorStatus" class="muted">The editor is ready for DB-backed songs, profile defaults, and fullscreen practice.</p>
+      </div>
+      <div class="workspaceActions">
         <button id="loadBtn" class="primary" type="button">Load &amp; Sync</button>
-      </div>
-      <div class="row tight">
-        <button id="calibrateBtn" class="secondary" type="button">Calibrate using current frame</button>
-      </div>
-      <div id="calibrateStatus" class="small"></div>
-      <div class="small" id="presetStatus"></div>
-    </div>
-
-    <div class="card">
-      <h2>Timeline Labels</h2>
-      <div class="row cols2">
-        <div>
-          <label for="markerName">Label</label>
-          <input id="markerName" type="text" placeholder="Verse 1" />
-        </div>
-        <div>
-          <label for="markerKey">Shortcut key</label>
-          <select id="markerKey"></select>
-        </div>
-      </div>
-
-      <div class="row cols2">
-        <div>
-          <label for="markerSource">Time source</label>
-          <select id="markerSource">
-            <option value="song">Official clip</option>
-            <option value="piano">Tutorial</option>
-          </select>
-        </div>
-        <div>
-          <label for="markerTime">Time (sec)</label>
-          <input id="markerTime" type="number" step="0.1" value="0" />
-        </div>
-      </div>
-
-      <div class="row tight">
-        <button id="useCurrentMarkerBtn" class="secondary" type="button">Use current</button>
-        <button id="addMarkerBtn" class="secondary" type="button">Add / Update</button>
-      </div>
-
-      <div id="markersList" class="markersList small">No labels yet.</div>
-    </div>
-
-    <div class="card">
-      <h2>Sections &amp; Loop Practice</h2>
-      <div class="row cols2">
-        <div>
-          <label for="sectionName">Section name</label>
-          <input id="sectionName" type="text" placeholder="Verse 1" />
-        </div>
-        <div>
-          <label for="sectionColor">Color</label>
-          <input id="sectionColor" type="color" value="#2f7cff" />
-        </div>
-      </div>
-
-      <div class="row cols2">
-        <div>
-          <label for="sectionStart">Start (sec)</label>
-          <input id="sectionStart" type="number" step="0.1" value="0" />
-        </div>
-        <div>
-          <label for="sectionEnd">End (sec, empty = song end)</label>
-          <input id="sectionEnd" type="number" step="0.1" placeholder="until end" />
-        </div>
-      </div>
-
-      <div class="row cols2">
-        <div>
-          <label for="sectionRepeat">Loop repeats (0 = infinite)</label>
-          <input id="sectionRepeat" type="number" min="0" step="1" value="4" />
-        </div>
-        <div>
-          <label for="sectionShortcut">Shortcut</label>
-          <select id="sectionShortcut"></select>
-        </div>
-      </div>
-
-      <div class="row tight">
-        <button id="useCurrentSectionStartBtn" class="secondary" type="button">Set start from current</button>
-        <button id="useCurrentSectionEndBtn" class="secondary" type="button">Set end from current</button>
-      </div>
-      <div class="row tight">
-        <button id="addSectionBtn" class="secondary" type="button">Add / Update section</button>
-      </div>
-
-      <div id="sectionsList" class="markersList small">No sections yet.</div>
-    </div>
-
-    <div class="card">
-      <h2>Lyrics &amp; Export</h2>
-      <label for="lyricsPaste">Lyrics (manual)</label>
-      <textarea id="lyricsPaste" rows="9" placeholder="Paste plain lyrics or LRC timestamps here..."></textarea>
-
-      <div class="row tight">
-        <button id="usePastedBtn" class="secondary" type="button">Use pasted lyrics</button>
-        <button id="exportPresetBtn" class="secondary" type="button">Export JSON</button>
-      </div>
-
-      <label for="exportOutput">Export output</label>
-      <textarea id="exportOutput" class="exportArea" readonly placeholder="Exported JSON appears here."></textarea>
-    </div>
-
-    <div class="card">
-      <h2>Shortcut Remap</h2>
-      <div class="row cols2">
-        <div>
-          <label for="keyPlayPause">Play/Pause</label>
-          <input id="keyPlayPause" type="text" value="Space" maxlength="20" />
-        </div>
-        <div>
-          <label for="keyRestart">Restart</label>
-          <input id="keyRestart" type="text" value="R" maxlength="20" />
-        </div>
-      </div>
-
-      <div class="row cols2">
-        <div>
-          <label for="keyMute">Mute tutorial</label>
-          <input id="keyMute" type="text" value="M" maxlength="20" />
-        </div>
-        <div>
-          <label for="keyLyricsFocus">Lyrics focus</label>
-          <input id="keyLyricsFocus" type="text" value="L" maxlength="20" />
-        </div>
-      </div>
-
-      <div class="row cols2">
-        <div>
-          <label for="keyPracticeMode">Practice mode</label>
-          <input id="keyPracticeMode" type="text" value="F" maxlength="20" />
-        </div>
-        <div>
-          <label for="keyMetronomeToggle">Metronome</label>
-          <input id="keyMetronomeToggle" type="text" value="T" maxlength="20" />
-        </div>
-      </div>
-
-      <div class="row tight">
-        <button id="saveShortcutsBtn" class="secondary" type="button">Save shortcuts</button>
-        <button id="resetShortcutsBtn" class="secondary" type="button">Reset defaults</button>
-      </div>
-      <div id="shortcutStatus" class="small"></div>
-    </div>
-  </div>
-</section>
-
-<main>
-  <section class="players">
-    <div class="playerWrap">
-      <div class="playerHeading">
-        <p class="playerTitle">Tutorial</p>
-        <span id="pianoPlayerStatus" class="playerStatusBadge" data-state="idle" aria-live="polite">Not loaded</span>
-      </div>
-      <div class="playerBox"><div id="pianoPlayer"></div></div>
-    </div>
-    <div class="playerWrap">
-      <div class="playerHeading">
-        <p class="playerTitle">Official Clip</p>
-        <span id="songPlayerStatus" class="playerStatusBadge" data-state="idle" aria-live="polite">Not loaded</span>
-      </div>
-      <div class="playerBox"><div id="songPlayer"></div></div>
-    </div>
-  </section>
-
-  <section class="transport card">
-    <div class="transportTop">
-      <div class="transportButtons">
-        <button id="playBtn" class="iconBtn large" type="button" disabled title="Play / Pause (Space)" aria-label="Play / Pause">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path id="playIconPath" d="M8 5v14l11-7z"/></svg>
-        </button>
-        <button id="restartBtn" class="iconBtn" type="button" disabled title="Back to start (R)" aria-label="Back to start">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 7l5 5V9c3.3 0 6 2.7 6 6s-2.7 6-6 6a6 6 0 0 1-5.7-4H4.2A8 8 0 1 0 12 5"/></svg>
-        </button>
-        <button id="mutePianoBtn" class="iconBtn" type="button" disabled title="Mute / Unmute tutorial (M)" aria-label="Mute tutorial">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path id="muteIconPath" d="M5 9v6h4l5 5V4L9 9Zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4"/></svg>
-        </button>
-        <button id="lyricsFocusBtn" class="iconBtn" type="button" title="Focus lyrics" aria-label="Focus lyrics">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v2H6v5H4Zm10 0h6v6h-2V6h-4ZM4 14h2v4h5v2H4Zm14 0h2v6h-6v-2h4Z"/></svg>
-        </button>
-      </div>
-      <div id="timeLabel" class="timeLabel">00:00 / 00:00</div>
-    </div>
-
-    <input id="scrubber" type="range" min="0" max="100" value="0" step="0.01" disabled />
-
-    <div class="loopControls">
-      <div class="loopStatus" id="loopStatus">Loop: Off</div>
-      <button id="toggleLoopBtn" class="secondary" type="button">Toggle Loop</button>
-      <button id="setLoopABtn" class="secondary" type="button">Set A</button>
-      <button id="setLoopBBtn" class="secondary" type="button">Set B</button>
-      <button id="clearLoopBtn" class="secondary" type="button">Clear</button>
-      <label for="loopRepeats">Repeats</label>
-      <input id="loopRepeats" type="number" min="0" step="1" value="4" />
-      <label for="metronomeBpm">BPM</label>
-      <input id="metronomeBpm" type="number" min="30" max="300" step="1" value="92" />
-      <label for="metronomeBeatsPerBar">Beats</label>
-      <input id="metronomeBeatsPerBar" type="number" min="1" max="12" step="1" value="4" />
-      <button id="toggleMetronomeBtn" class="secondary" type="button">Metronome Off</button>
-      <button id="resyncBtn" class="secondary" type="button">Resync now</button>
-    </div>
-
-    <div class="diagGrid" id="diagGrid">
-      <div class="diagCell"><span>Drift</span><strong id="diagDrift">0 ms</strong></div>
-      <div class="diagCell"><span>Corrections</span><strong id="diagCorrections">0</strong></div>
-      <div class="diagCell"><span>Buffer events</span><strong id="diagBuffering">0</strong></div>
-      <div class="diagCell"><span>Loop cycles</span><strong id="diagLoops">0</strong></div>
-    </div>
-
-    <div class="small hintText">
-      `Space` play/pause, `R` restart, `M` mute tutorial, `Left/Right` seek, `1-9` jump to labels, `?` shortcuts
-    </div>
-  </section>
-
-  <section class="lyricsSection card">
-    <div class="lyricsHeader">
-      <h2>Lyrics</h2>
-      <div class="row tight">
-        <span class="small">Manual mode</span>
-        <button id="practiceModeBtn" class="secondary" type="button">Fullscreen practice</button>
+        <button id="saveSongBtn" class="secondary" type="button">Publish song</button>
+        <button id="newDraftBtn" class="secondary" type="button">New draft</button>
       </div>
     </div>
-    <div id="lyricsBox" class="lyricsBox"></div>
+
+    <div class="workspaceGrid">
+      <aside class="editorRail">
+        <article class="card">
+          <h3>Song Setup</h3>
+          <div class="row cols2">
+            <div>
+              <label for="songTitle">Song title</label>
+              <input id="songTitle" type="text" placeholder="Stay" />
+            </div>
+            <div>
+              <label for="songArtist">Artist</label>
+              <input id="songArtist" type="text" placeholder="Rihanna" />
+            </div>
+          </div>
+
+          <label for="songSummary">Lobby summary</label>
+          <textarea id="songSummary" rows="3" placeholder="Short summary shown on the public song card."></textarea>
+
+          <label for="songUrl">Official clip URL</label>
+          <input id="songUrl" type="text" placeholder="https://www.youtube.com/watch?v=..." />
+
+          <label for="pianoUrl">Tutorial URL</label>
+          <input id="pianoUrl" type="text" placeholder="https://www.youtube.com/watch?v=..." />
+
+          <div class="row cols2">
+            <div>
+              <label for="songOffset">Official starts at (sec)</label>
+              <input id="songOffset" type="number" step="0.1" value="0" />
+            </div>
+            <div>
+              <label for="pianoOffset">Tutorial starts at (sec)</label>
+              <input id="pianoOffset" type="number" step="0.1" value="0" />
+            </div>
+          </div>
+
+          <div class="row cols2">
+            <div>
+              <label for="countdownSec">Play countdown (sec)</label>
+              <select id="countdownSec">
+                <option value="0">Off</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4" selected>4</option>
+                <option value="5">5</option>
+                <option value="8">8</option>
+              </select>
+            </div>
+            <div>
+              <label for="publishSongToggle">Public in lobby</label>
+              <select id="publishSongToggle">
+                <option value="true" selected>Published</option>
+                <option value="false">Hidden draft</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row cols2">
+            <div>
+              <label for="metronomeBpm">Metronome BPM</label>
+              <input id="metronomeBpm" type="number" min="30" max="300" step="1" value="92" />
+            </div>
+            <div>
+              <label for="metronomeBeatsPerBar">Beats per bar</label>
+              <input id="metronomeBeatsPerBar" type="number" min="1" max="12" step="1" value="4" />
+            </div>
+          </div>
+
+          <div class="row">
+            <button id="calibrateBtn" class="secondary" type="button">Calibrate using current frame</button>
+          </div>
+          <div id="calibrateStatus" class="small muted"></div>
+        </article>
+
+        <article class="card">
+          <div class="cardHeader">
+            <h3>Timeline Labels</h3>
+            <button id="captureMarkerBtn" class="secondary" type="button">Capture label</button>
+          </div>
+
+          <div class="row cols2">
+            <div>
+              <label for="markerName">Label name</label>
+              <input id="markerName" type="text" placeholder="Verse 1" />
+            </div>
+            <div>
+              <label for="markerTime">Master time (sec)</label>
+              <input id="markerTime" type="number" step="0.1" value="0" />
+            </div>
+          </div>
+
+          <div class="row">
+            <button id="useCurrentMarkerBtn" class="secondary" type="button">Use current time</button>
+            <button id="addMarkerBtn" class="secondary" type="button">Add / Update label</button>
+          </div>
+
+          <p id="markerThresholdHint" class="small muted"></p>
+          <div id="markersList" class="markersList small">No labels yet.</div>
+        </article>
+
+        <article class="card">
+          <h3>Sections &amp; Loop Practice</h3>
+          <div class="row cols2">
+            <div>
+              <label for="sectionName">Section name</label>
+              <input id="sectionName" type="text" placeholder="Verse 1" />
+            </div>
+            <div>
+              <label for="sectionColor">Color</label>
+              <input id="sectionColor" type="color" value="#4f8cff" />
+            </div>
+          </div>
+
+          <div class="row cols2">
+            <div>
+              <label for="sectionStart">Start (sec)</label>
+              <input id="sectionStart" type="number" step="0.1" value="0" />
+            </div>
+            <div>
+              <label for="sectionEnd">End (sec)</label>
+              <input id="sectionEnd" type="number" step="0.1" placeholder="Leave empty for song end" />
+            </div>
+          </div>
+
+          <div class="row cols2">
+            <div>
+              <label for="sectionRepeat">Loop repeats</label>
+              <input id="sectionRepeat" type="number" min="0" step="1" value="4" />
+            </div>
+            <div>
+              <label for="sectionShortcut">Shortcut</label>
+              <select id="sectionShortcut"></select>
+            </div>
+          </div>
+
+          <div class="row">
+            <button id="useCurrentSectionStartBtn" class="secondary" type="button">Set start from current</button>
+            <button id="useCurrentSectionEndBtn" class="secondary" type="button">Set end from current</button>
+          </div>
+          <div class="row">
+            <button id="addSectionBtn" class="secondary" type="button">Add / Update section</button>
+          </div>
+
+          <div id="sectionsList" class="markersList small">No sections yet.</div>
+        </article>
+
+        <article class="card">
+          <h3>Profile Defaults</h3>
+          <div class="row cols2">
+            <div>
+              <label for="autoPracticeOnPlay">Auto fullscreen on play</label>
+              <select id="autoPracticeOnPlay">
+                <option value="true" selected>On</option>
+                <option value="false">Off</option>
+              </select>
+            </div>
+            <div>
+              <label for="showPracticeShortcutLegend">Show practice helper</label>
+              <select id="showPracticeShortcutLegend">
+                <option value="true" selected>Visible</option>
+                <option value="false">Hidden</option>
+              </select>
+            </div>
+          </div>
+
+          <label for="markerRetargetThreshold">Marker correction threshold (sec)</label>
+          <input id="markerRetargetThreshold" type="number" min="0.5" max="30" step="0.5" value="5" />
+
+          <div class="row cols2">
+            <div>
+              <label for="keyPlayPause">Play / Pause</label>
+              <input id="keyPlayPause" type="text" value="Space" maxlength="20" />
+            </div>
+            <div>
+              <label for="keyRestart">Restart</label>
+              <input id="keyRestart" type="text" value="R" maxlength="20" />
+            </div>
+          </div>
+
+          <div class="row cols2">
+            <div>
+              <label for="keyMute">Mute tutorial</label>
+              <input id="keyMute" type="text" value="M" maxlength="20" />
+            </div>
+            <div>
+              <label for="keyLyricsFocus">Lyrics focus</label>
+              <input id="keyLyricsFocus" type="text" value="L" maxlength="20" />
+            </div>
+          </div>
+
+          <div class="row cols2">
+            <div>
+              <label for="keyPracticeMode">Practice mode</label>
+              <input id="keyPracticeMode" type="text" value="F" maxlength="20" />
+            </div>
+            <div>
+              <label for="keyMetronomeToggle">Metronome</label>
+              <input id="keyMetronomeToggle" type="text" value="T" maxlength="20" />
+            </div>
+          </div>
+
+          <div class="row cols2">
+            <div>
+              <label for="keyToggleShortcutLegend">Toggle helper</label>
+              <input id="keyToggleShortcutLegend" type="text" value="H" maxlength="20" />
+            </div>
+            <div>
+              <label for="keyCaptureMarker">Capture label</label>
+              <input id="keyCaptureMarker" type="text" value="Q" maxlength="20" />
+            </div>
+          </div>
+
+          <div class="row">
+            <button id="saveShortcutsBtn" class="secondary" type="button">Save profile defaults</button>
+            <button id="resetShortcutsBtn" class="secondary" type="button">Reset defaults</button>
+          </div>
+
+          <div id="shortcutStatus" class="small muted"></div>
+        </article>
+
+        <article class="card">
+          <h3>Lyrics &amp; Export</h3>
+          <label for="lyricsPaste">Lyrics</label>
+          <textarea id="lyricsPaste" rows="11" placeholder="Paste plain lyrics or LRC timestamps here..."></textarea>
+
+          <div class="row">
+            <button id="usePastedBtn" class="secondary" type="button">Use pasted lyrics</button>
+            <button id="exportPresetBtn" class="secondary" type="button">Export JSON</button>
+          </div>
+
+          <label for="exportOutput">Export output</label>
+          <textarea id="exportOutput" class="exportArea" readonly placeholder="Exported JSON appears here."></textarea>
+        </article>
+      </aside>
+
+      <section class="playerSurface">
+        <section class="players">
+          <div class="playerWrap">
+            <div class="playerHeading">
+              <p class="playerTitle">Tutorial</p>
+              <span id="pianoPlayerStatus" class="playerStatusBadge" data-state="idle">Not loaded</span>
+            </div>
+            <div class="playerBox"><div id="pianoPlayer"></div></div>
+          </div>
+          <div class="playerWrap">
+            <div class="playerHeading">
+              <p class="playerTitle">Official Clip</p>
+              <span id="songPlayerStatus" class="playerStatusBadge" data-state="idle">Not loaded</span>
+            </div>
+            <div class="playerBox"><div id="songPlayer"></div></div>
+          </div>
+        </section>
+
+        <section class="transport card">
+          <div class="transportTop">
+            <div class="transportButtons">
+              <button id="playBtn" class="iconBtn large" type="button" disabled aria-label="Play / Pause">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path id="playIconPath" d="M8 5v14l11-7z"></path></svg>
+              </button>
+              <button id="restartBtn" class="iconBtn" type="button" disabled aria-label="Back to start">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 7l5 5V9c3.3 0 6 2.7 6 6s-2.7 6-6 6a6 6 0 0 1-5.7-4H4.2A8 8 0 1 0 12 5"></path></svg>
+              </button>
+              <button id="mutePianoBtn" class="iconBtn" type="button" disabled aria-label="Mute tutorial">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path id="muteIconPath" d="M5 9v6h4l5 5V4L9 9Zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4"></path></svg>
+              </button>
+              <button id="lyricsFocusBtn" class="iconBtn" type="button" aria-label="Focus lyrics">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v2H6v5H4Zm10 0h6v6h-2V6h-4ZM4 14h2v4h5v2H4Zm14 0h2v6h-6v-2h4Z"></path></svg>
+              </button>
+            </div>
+            <div id="timeLabel" class="timeLabel">00:00 / 00:00</div>
+          </div>
+
+          <input id="scrubber" type="range" min="0" max="100" value="0" step="0.01" disabled />
+
+          <div class="loopControls">
+            <div id="loopStatus" class="loopStatus">Loop: Off</div>
+            <button id="toggleLoopBtn" class="secondary" type="button">Toggle loop</button>
+            <button id="setLoopABtn" class="secondary" type="button">Set A</button>
+            <button id="setLoopBBtn" class="secondary" type="button">Set B</button>
+            <button id="clearLoopBtn" class="secondary" type="button">Clear</button>
+            <label for="loopRepeats">Repeats</label>
+            <input id="loopRepeats" type="number" min="0" step="1" value="4" />
+            <button id="toggleMetronomeBtn" class="secondary" type="button">Metronome Off</button>
+            <button id="resyncBtn" class="secondary" type="button">Resync now</button>
+          </div>
+
+          <div class="diagGrid" id="diagGrid">
+            <div class="diagCell"><span>Drift</span><strong id="diagDrift">0 ms</strong></div>
+            <div class="diagCell"><span>Corrections</span><strong id="diagCorrections">0</strong></div>
+            <div class="diagCell"><span>Buffer events</span><strong id="diagBuffering">0</strong></div>
+            <div class="diagCell"><span>Loop cycles</span><strong id="diagLoops">0</strong></div>
+          </div>
+        </section>
+
+        <section class="lyricsSection card">
+          <div class="lyricsHeader">
+            <div>
+              <p class="eyebrow">Practice</p>
+              <h3>Lyrics &amp; shortcut helper</h3>
+            </div>
+            <div class="row">
+              <button id="practiceModeBtn" class="secondary" type="button">Fullscreen practice</button>
+              <button id="togglePracticeHelperBtn" class="secondary" type="button">Hide helper</button>
+            </div>
+          </div>
+
+          <div class="lyricsPracticeGrid">
+            <div id="lyricsBox" class="lyricsBox"></div>
+
+            <aside id="practiceHelper" class="practiceHelper">
+              <div class="helperBlock">
+                <h4>Practice helper</h4>
+                <div id="practiceShortcutSummary" class="shortcutSummary"></div>
+              </div>
+
+              <div class="helperBlock">
+                <h4>Jump labels</h4>
+                <div id="markerJumpLegend" class="markerJumpLegend small muted">No labels assigned yet.</div>
+              </div>
+            </aside>
+          </div>
+        </section>
+      </section>
+    </div>
   </section>
 </main>
+
+<footer class="siteFooter">
+  <div>
+    <strong>sync.tvguitar.com</strong>
+    <p class="muted">Email: <a href="mailto:ufkfir@icloud.com">ufkfir@icloud.com</a></p>
+  </div>
+  <div class="footerLinks">
+    <a href="/terms.html">Terms</a>
+    <a href="/privacy.html">Privacy</a>
+    <a href="/cookies.html">Cookies</a>
+    <a href="/LICENSE">License</a>
+  </div>
+</footer>
+
+<div id="toastRegion" class="toastRegion" aria-live="polite"></div>
 
 <div id="countdownOverlay" class="countdownOverlay hidden" aria-live="polite">
   <div id="countdownValue" class="countdownValue">4</div>
@@ -298,15 +438,89 @@
 <div id="shortcutsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
   <div class="modalCard">
     <div class="modalHead">
-      <h2 id="shortcutsTitle">Keyboard Shortcuts</h2>
+      <h3 id="shortcutsTitle">Keyboard Shortcuts</h3>
       <button id="closeShortcutsBtn" class="iconBtn" type="button" aria-label="Close shortcuts">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19 6.4-1.4-1.4L12 10.6 6.4 5 5 6.4l5.6 5.6L5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6z"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19 6.4-1.4-1.4L12 10.6 6.4 5 5 6.4l5.6 5.6L5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6z"></path></svg>
       </button>
     </div>
     <div id="shortcutsList" class="shortcutsList"></div>
   </div>
 </div>
 
+<div id="authModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+  <div class="modalCard authModalCard">
+    <div class="modalHead">
+      <h3 id="authModalTitle">Log in or create an account</h3>
+      <button id="closeAuthModalBtn" class="iconBtn" type="button" aria-label="Close auth dialog">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19 6.4-1.4-1.4L12 10.6 6.4 5 5 6.4l5.6 5.6L5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6z"></path></svg>
+      </button>
+    </div>
+
+    <div class="tabRow">
+      <button id="authTabLogin" class="tabButton active" type="button">Log in</button>
+      <button id="authTabSignup" class="tabButton" type="button">Sign up</button>
+    </div>
+
+    <form id="authForm" class="authForm">
+      <label for="authEmail">Email</label>
+      <input id="authEmail" type="email" autocomplete="email" required />
+
+      <label for="authPassword">Password</label>
+      <input id="authPassword" type="password" autocomplete="current-password" required />
+
+      <button id="authSubmitBtn" class="primary" type="submit">Log in</button>
+      <p id="authStatus" class="small muted"></p>
+    </form>
+  </div>
+</div>
+
+<div id="profileModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
+  <div class="modalCard">
+    <div class="modalHead">
+      <h3 id="profileModalTitle">Profile</h3>
+      <button id="closeProfileModalBtn" class="iconBtn" type="button" aria-label="Close profile dialog">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19 6.4-1.4-1.4L12 10.6 6.4 5 5 6.4l5.6 5.6L5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6z"></path></svg>
+      </button>
+    </div>
+
+    <div class="profileStack">
+      <div>
+        <p class="eyebrow">Account</p>
+        <h4 id="profileNameText">Guest</h4>
+        <p id="profileEmailText" class="muted"></p>
+      </div>
+
+      <div>
+        <p class="eyebrow">My songs</p>
+        <div id="mySongsList" class="markersList small">Log in to see your songs.</div>
+      </div>
+
+      <div>
+        <p class="eyebrow">Account deletion</p>
+        <p class="small muted">
+          Published songs may remain visible after account deletion or closure. This should be stated clearly in the legal pages.
+        </p>
+        <button id="deleteAccountBtn" class="danger" type="button">Delete account</button>
+        <p id="deleteAccountStatus" class="small muted"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="cookieBanner" class="cookieBanner hidden" role="dialog" aria-live="polite">
+  <div>
+    <strong>Cookie and consent preferences</strong>
+    <p class="small muted">
+      Essential storage keeps your session and local draft working. Analytics and ads stay off until you explicitly allow them.
+    </p>
+  </div>
+  <div class="cookieActions">
+    <button id="cookieEssentialBtn" class="secondary" type="button">Essential only</button>
+    <button id="cookieAcceptBtn" class="primary" type="button">Accept optional</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
 <script src="app.js" defer></script>
 </body>
 </html>

@@ -2,12 +2,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG="$ROOT/config.yaml"
 SERVER_PID=""
 
 cleanup() {
   if [[ -n "${SERVER_PID:-}" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
     echo
-    echo "Stopping Python server (PID $SERVER_PID)..."
+    echo "Stopping Go server (PID $SERVER_PID)..."
     kill "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
   fi
@@ -15,13 +16,29 @@ cleanup() {
 
 trap cleanup INT TERM EXIT
 
+if ! command -v go >/dev/null 2>&1; then
+  echo "Go is not installed or not on PATH."
+  echo "Install Go, then run this script again."
+  exit 1
+fi
+
+if [[ ! -f "$CONFIG" ]]; then
+  cp "$ROOT/config.example.yaml" "$CONFIG"
+  echo "Created $CONFIG from config.example.yaml."
+  echo "Update the database credentials, then run the script again."
+  exit 1
+fi
+
 cd "$ROOT"
-python3 -m http.server 8028 &
+go run . -config "$CONFIG" &
 SERVER_PID=$!
 
-sleep 1
-open "http://localhost:8028/index.html"
+sleep 2
+if command -v open >/dev/null 2>&1; then
+  open "http://localhost:8028/"
+fi
 
-echo "Server running at http://localhost:8028 (PID $SERVER_PID)"
+echo "Go server running at http://localhost:8028 (PID $SERVER_PID)"
+echo "SQL patches in db/patches/ are applied automatically on startup."
 echo "Press Ctrl-C to stop."
 wait "$SERVER_PID"

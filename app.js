@@ -1,4 +1,4 @@
-/* global YT */
+/* global YT, supabase */
 
 const el = (id) => document.getElementById(id);
 
@@ -6,13 +6,14 @@ const PLAY_ICON_PATH = "M8 5v14l11-7z";
 const PAUSE_ICON_PATH = "M6 5h4v14H6zm8 0h4v14h-4z";
 const MUTE_ICON_PATH = "M5 9v6h4l5 5V4L9 9Zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4";
 const UNMUTE_ICON_PATH = "M5 9v6h4l5 5V4L9 9Zm9.6 3 2.4 2.4 1.4-1.4-2.4-2.4 2.4-2.4-1.4-1.4-2.4 2.4-2.4-2.4-1.4 1.4 2.4 2.4-2.4 2.4 1.4 1.4z";
-const MARKER_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
-const SECTION_SHORTCUT_KEYS = ["", "Z", "X", "C", "V", "B", "N", "J", "U", "I"];
-
 const THEME_MODES = ["system", "dark", "light"];
-const THEME_STORAGE_KEY = "practice-player-theme-mode";
-const DRAFT_STORAGE_KEY = "practice-player-draft-v3";
-const SHORTCUT_STORAGE_KEY = "practice-player-shortcuts-v1";
+const SECTION_SHORTCUT_KEYS = ["", "Z", "X", "C", "V", "B", "N", "J", "U", "I"];
+const MARKER_JUMP_POOL = [
+  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+  "-", "=", "Q", "W", "E", "Y", "U", "I", "O", "P",
+  "[", "]", "A", "S", "D", "G", "H", "J", "K", ";"
+];
+
 const PLAYER_STATUS_LABELS = {
   idle: "Not loaded",
   loading: "Loading",
@@ -24,149 +25,195 @@ const PLAYER_STATUS_LABELS = {
   error: "Error"
 };
 
-const DEFAULT_SHORTCUTS = {
-  playPause: "Space",
-  restart: "R",
-  mute: "M",
-  lyricsFocus: "L",
-  practiceMode: "F",
-  metronomeToggle: "T"
+const STORAGE_KEYS = {
+  theme: "sync-player-theme",
+  draft: "sync-player-draft-v5",
+  settings: "sync-player-settings-v5",
+  cookies: "sync-player-cookie-consent"
 };
 
-// --- Helpers ---
-function extractYouTubeId(url) {
-  try {
-    const u = new URL(url.trim());
-    if (u.hostname.includes("youtu.be")) return u.pathname.replace("/", "");
-    if (u.searchParams.get("v")) return u.searchParams.get("v");
-    const parts = u.pathname.split("/").filter(Boolean);
-    return parts[parts.length - 1] || "";
-  } catch {
-    return "";
+const dom = {
+  bootstrapStatus: el("bootstrapStatus"),
+  authIndicator: el("authIndicator"),
+  loginBtn: el("loginBtn"),
+  signupBtn: el("signupBtn"),
+  logoutBtn: el("logoutBtn"),
+  profileBtn: el("profileBtn"),
+  themeBtn: el("themeBtn"),
+  openShortcutsBtn: el("openShortcutsBtn"),
+  heroCreateSongBtn: el("heroCreateSongBtn"),
+  createSongBtn: el("createSongBtn"),
+  songSearch: el("songSearch"),
+  lobbyGrid: el("lobbyGrid"),
+  workspaceTitle: el("workspaceTitle"),
+  editorStatus: el("editorStatus"),
+  editorModeBadge: el("editorModeBadge"),
+  saveSongBtn: el("saveSongBtn"),
+  newDraftBtn: el("newDraftBtn"),
+  songTitle: el("songTitle"),
+  songArtist: el("songArtist"),
+  songSummary: el("songSummary"),
+  songUrl: el("songUrl"),
+  pianoUrl: el("pianoUrl"),
+  songOffset: el("songOffset"),
+  pianoOffset: el("pianoOffset"),
+  countdownSec: el("countdownSec"),
+  publishSongToggle: el("publishSongToggle"),
+  loadBtn: el("loadBtn"),
+  calibrateBtn: el("calibrateBtn"),
+  calibrateStatus: el("calibrateStatus"),
+  lyricsPaste: el("lyricsPaste"),
+  usePastedBtn: el("usePastedBtn"),
+  exportPresetBtn: el("exportPresetBtn"),
+  exportOutput: el("exportOutput"),
+  markerName: el("markerName"),
+  markerTime: el("markerTime"),
+  useCurrentMarkerBtn: el("useCurrentMarkerBtn"),
+  addMarkerBtn: el("addMarkerBtn"),
+  captureMarkerBtn: el("captureMarkerBtn"),
+  markersList: el("markersList"),
+  markerThresholdHint: el("markerThresholdHint"),
+  sectionName: el("sectionName"),
+  sectionColor: el("sectionColor"),
+  sectionStart: el("sectionStart"),
+  sectionEnd: el("sectionEnd"),
+  sectionRepeat: el("sectionRepeat"),
+  sectionShortcut: el("sectionShortcut"),
+  useCurrentSectionStartBtn: el("useCurrentSectionStartBtn"),
+  useCurrentSectionEndBtn: el("useCurrentSectionEndBtn"),
+  addSectionBtn: el("addSectionBtn"),
+  sectionsList: el("sectionsList"),
+  autoPracticeOnPlay: el("autoPracticeOnPlay"),
+  showPracticeShortcutLegend: el("showPracticeShortcutLegend"),
+  markerRetargetThreshold: el("markerRetargetThreshold"),
+  keyPlayPause: el("keyPlayPause"),
+  keyRestart: el("keyRestart"),
+  keyMute: el("keyMute"),
+  keyLyricsFocus: el("keyLyricsFocus"),
+  keyPracticeMode: el("keyPracticeMode"),
+  keyMetronomeToggle: el("keyMetronomeToggle"),
+  keyToggleShortcutLegend: el("keyToggleShortcutLegend"),
+  keyCaptureMarker: el("keyCaptureMarker"),
+  saveShortcutsBtn: el("saveShortcutsBtn"),
+  resetShortcutsBtn: el("resetShortcutsBtn"),
+  shortcutStatus: el("shortcutStatus"),
+  practiceShortcutSummary: el("practiceShortcutSummary"),
+  markerJumpLegend: el("markerJumpLegend"),
+  togglePracticeHelperBtn: el("togglePracticeHelperBtn"),
+  practiceHelper: el("practiceHelper"),
+  practiceModeBtn: el("practiceModeBtn"),
+  lyricsFocusBtn: el("lyricsFocusBtn"),
+  lyricsBox: el("lyricsBox"),
+  timeLabel: el("timeLabel"),
+  scrubber: el("scrubber"),
+  playBtn: el("playBtn"),
+  restartBtn: el("restartBtn"),
+  mutePianoBtn: el("mutePianoBtn"),
+  playIconPath: el("playIconPath"),
+  muteIconPath: el("muteIconPath"),
+  toggleLoopBtn: el("toggleLoopBtn"),
+  setLoopABtn: el("setLoopABtn"),
+  setLoopBBtn: el("setLoopBBtn"),
+  clearLoopBtn: el("clearLoopBtn"),
+  loopRepeats: el("loopRepeats"),
+  loopStatus: el("loopStatus"),
+  metronomeBpm: el("metronomeBpm"),
+  metronomeBeatsPerBar: el("metronomeBeatsPerBar"),
+  toggleMetronomeBtn: el("toggleMetronomeBtn"),
+  resyncBtn: el("resyncBtn"),
+  diagDrift: el("diagDrift"),
+  diagCorrections: el("diagCorrections"),
+  diagBuffering: el("diagBuffering"),
+  diagLoops: el("diagLoops"),
+  pianoPlayerStatus: el("pianoPlayerStatus"),
+  songPlayerStatus: el("songPlayerStatus"),
+  countdownOverlay: el("countdownOverlay"),
+  countdownValue: el("countdownValue"),
+  shortcutsModal: el("shortcutsModal"),
+  closeShortcutsBtn: el("closeShortcutsBtn"),
+  shortcutsList: el("shortcutsList"),
+  authModal: el("authModal"),
+  closeAuthModalBtn: el("closeAuthModalBtn"),
+  authTabLogin: el("authTabLogin"),
+  authTabSignup: el("authTabSignup"),
+  authForm: el("authForm"),
+  authEmail: el("authEmail"),
+  authPassword: el("authPassword"),
+  authSubmitBtn: el("authSubmitBtn"),
+  authStatus: el("authStatus"),
+  profileModal: el("profileModal"),
+  closeProfileModalBtn: el("closeProfileModalBtn"),
+  profileNameText: el("profileNameText"),
+  profileEmailText: el("profileEmailText"),
+  mySongsList: el("mySongsList"),
+  deleteAccountBtn: el("deleteAccountBtn"),
+  deleteAccountStatus: el("deleteAccountStatus"),
+  cookieBanner: el("cookieBanner"),
+  cookieEssentialBtn: el("cookieEssentialBtn"),
+  cookieAcceptBtn: el("cookieAcceptBtn"),
+  toastRegion: el("toastRegion")
+};
+
+const app = {
+  bootstrap: null,
+  supabase: null,
+  session: null,
+  profile: null,
+  songs: [],
+  mySongs: [],
+  settings: null,
+  currentSongId: "",
+  currentSongCanEdit: false,
+  currentSongOwner: "",
+  lyrics: [],
+  markers: [],
+  sections: [],
+  searchTerm: "",
+  authMode: "login",
+  practiceHelperVisible: true,
+  playerUiState: {
+    song: { hasStartedPlayback: false },
+    piano: { hasStartedPlayback: false }
+  },
+  loop: {
+    enabled: false,
+    aSec: null,
+    bSec: null,
+    repeatTarget: 4,
+    completed: 0
+  },
+  diagnostics: {
+    driftMs: 0,
+    corrections: 0,
+    bufferingEvents: 0,
+    loopCycles: 0
   }
-}
+};
 
-function getYouTubeInputIssue(label, rawUrl) {
-  const value = String(rawUrl || "").trim();
-  if (!value) {
-    return `${label} URL is empty. Select a preset to auto-fill it, or paste a full YouTube link.`;
-  }
-
-  if (!extractYouTubeId(value)) {
-    return `${label} URL could not be parsed as a YouTube link:\n${value}`;
-  }
-
-  return "";
-}
-
-function fmtTime(sec) {
-  const safe = Math.max(0, Number(sec) || 0);
-  const m = Math.floor(safe / 60);
-  const s = Math.floor(safe % 60);
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-function parseLRC(text) {
-  const lines = [];
-  const re = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,2}))?\]\s*(.*)/g;
-  for (const row of text.split(/\r?\n/)) {
-    let m;
-    let matched = false;
-    while ((m = re.exec(row)) !== null) {
-      matched = true;
-      const mm = Number.parseInt(m[1], 10);
-      const ss = Number.parseInt(m[2], 10);
-      const cs = m[3] ? Number.parseInt(m[3].padEnd(2, "0"), 10) : 0;
-      const t = mm * 60 + ss + cs / 100;
-      const content = (m[4] || "").trim();
-      if (content) lines.push({ t, content });
-    }
-    if (!matched && row.trim()) {
-      lines.push({ t: null, content: row.trim() });
-    }
-    re.lastIndex = 0;
-  }
-
-  if (lines.some((x) => x.t != null)) {
-    return lines.filter((x) => x.t != null).sort((a, b) => a.t - b.t);
-  }
-  return lines.map((x) => ({ t: null, content: x.content }));
-}
-
-function ensureNumber(value, fallback = 0) {
-  const n = Number.parseFloat(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function round2(n) {
-  return Math.round(n * 100) / 100;
-}
-
-function genId(prefix) {
-  return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function clamp(n, min, max) {
-  return Math.min(max, Math.max(min, n));
-}
-
-function safeLocalStorageGet(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw == null ? fallback : raw;
-  } catch {
-    return fallback;
-  }
-}
-
-function safeLocalStorageSet(key, value) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Ignore storage failures.
-  }
-}
-
-function normalizeShortcutValue(input, fallback) {
-  const value = String(input || "").trim();
-  if (!value) return fallback;
-  if (value.toLowerCase() === "space") return "Space";
-  if (value.length === 1) return value.toUpperCase();
-  return value;
-}
-
-function keyMatchesShortcut(event, shortcut) {
-  if (!shortcut) return false;
-  if (shortcut === "Space") return event.code === "Space";
-  if (shortcut.length === 1) return event.key.toUpperCase() === shortcut.toUpperCase();
-  return event.key === shortcut || event.code === shortcut;
-}
+let songPlayer;
+let pianoPlayer;
+let readySong = false;
+let readyPiano = false;
+let isSyncing = false;
+let userScrubbing = false;
+let duration = 0;
+let songStartSec = 0;
+let pianoStartSec = 0;
+let syncTimer = null;
+let countdownTimer = null;
+let ytApiPromise = null;
+let lastPlayRequestAt = 0;
+let lastPianoCorrectionAt = 0;
+let lastActiveLyricIndex = -1;
+let autosaveTimer = null;
 
 class MetronomeEngine {
   constructor() {
     this.enabled = false;
+    this.audioCtx = null;
     this.bpm = 92;
     this.beatsPerBar = 4;
     this.timer = null;
-    this.audioCtx = null;
-    this.beatIndex = 0;
-  }
-
-  setEnabled(enabled) {
-    this.enabled = Boolean(enabled);
-    if (!this.enabled) this.stop();
-  }
-
-  setBpm(bpm) {
-    this.bpm = clamp(Math.round(ensureNumber(bpm, 92)), 30, 300);
-    if (this.timer) {
-      this.stop();
-      this.start();
-    }
-  }
-
-  setBeatsPerBar(beats) {
-    this.beatsPerBar = clamp(Math.round(ensureNumber(beats, 4)), 1, 12);
     this.beatIndex = 0;
   }
 
@@ -185,25 +232,37 @@ class MetronomeEngine {
   click() {
     const ctx = this.ensureContext();
     if (!ctx) return;
-
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     const accent = this.beatIndex % this.beatsPerBar === 0;
-
     osc.type = "square";
-    osc.frequency.setValueAtTime(accent ? 1260 : 840, ctx.currentTime);
-
+    osc.frequency.setValueAtTime(accent ? 1220 : 860, ctx.currentTime);
     gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.008);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.085);
-
+    gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.09);
     osc.connect(gain);
     gain.connect(ctx.destination);
-
     osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.095);
-
+    osc.stop(ctx.currentTime + 0.1);
     this.beatIndex += 1;
+  }
+
+  setEnabled(enabled) {
+    this.enabled = Boolean(enabled);
+    if (!this.enabled) this.stop();
+  }
+
+  setBpm(bpm) {
+    this.bpm = clamp(Math.round(ensureNumber(bpm, 92)), 30, 300);
+    if (this.timer) {
+      this.stop();
+      this.start();
+    }
+  }
+
+  setBeatsPerBar(beats) {
+    this.beatsPerBar = clamp(Math.round(ensureNumber(beats, 4)), 1, 12);
+    this.beatIndex = 0;
   }
 
   start() {
@@ -231,696 +290,581 @@ class MetronomeEngine {
 
 const metronome = new MetronomeEngine();
 
-// --- State ---
-let songPlayer;
-let pianoPlayer;
-let readySong = false;
-let readyPiano = false;
-let isSyncing = false;
-let userScrubbing = false;
-let duration = 0;
-let songStartSec = 0;
-let pianoStartSec = 0;
-let syncTimer = null;
-let lastPianoCorrectionAt = 0;
-let countdownTimer = null;
-let ytApiPromise = null;
-let prefersSchemeMql = null;
-let autosaveTimer = null;
-let isPreparingPlayers = false;
-let lastPlayRequestAt = 0;
-
-let lyrics = [];
-let lastActiveIdx = -1;
-let practiceCurrentLyricEl = null;
-let practiceCompactLyricsEl = null;
-let practiceFitRaf = 0;
-const playerUiState = {
-  song: { hasStartedPlayback: false },
-  piano: { hasStartedPlayback: false }
-};
-
-const appState = {
-  songs: [],
-  markers: [],
-  sections: [],
-  playWindowEnd: null,
-  diagnostics: {
-    driftMs: 0,
-    corrections: 0,
-    bufferingEvents: 0,
-    loopCycles: 0
-  },
-  loop: {
-    enabled: false,
-    aSec: null,
-    bSec: null,
-    repeatTarget: 4,
-    completed: 0
-  },
-  shortcuts: { ...DEFAULT_SHORTCUTS }
-};
-
-// --- UI ---
-const loadBtn = el("loadBtn");
-const calibrateBtn = el("calibrateBtn");
-const calibrateStatus = el("calibrateStatus");
-const playBtn = el("playBtn");
-const restartBtn = el("restartBtn");
-const mutePianoBtn = el("mutePianoBtn");
-const scrubber = el("scrubber");
-const timeLabel = el("timeLabel");
-const lyricsBox = el("lyricsBox");
-const presetSelect = el("presetSelect");
-const presetStatus = el("presetStatus");
-const toggleConfigBtn = el("toggleConfigBtn");
-const configPanel = el("configPanel");
-const playIconPath = el("playIconPath");
-const muteIconPath = el("muteIconPath");
-const countdownOverlay = el("countdownOverlay");
-const countdownValue = el("countdownValue");
-const shortcutsBtn = el("shortcutsBtn");
-const themeBtn = el("themeBtn");
-const shortcutsModal = el("shortcutsModal");
-const closeShortcutsBtn = el("closeShortcutsBtn");
-const shortcutsList = el("shortcutsList");
-const lyricsFocusBtn = el("lyricsFocusBtn");
-const practiceModeBtn = el("practiceModeBtn");
-const songPlayerStatus = el("songPlayerStatus");
-const pianoPlayerStatus = el("pianoPlayerStatus");
-
-const markerName = el("markerName");
-const markerKey = el("markerKey");
-const markerSource = el("markerSource");
-const markerTime = el("markerTime");
-const useCurrentMarkerBtn = el("useCurrentMarkerBtn");
-const addMarkerBtn = el("addMarkerBtn");
-const markersList = el("markersList");
-
-const sectionName = el("sectionName");
-const sectionColor = el("sectionColor");
-const sectionStart = el("sectionStart");
-const sectionEnd = el("sectionEnd");
-const sectionRepeat = el("sectionRepeat");
-const sectionShortcut = el("sectionShortcut");
-const useCurrentSectionStartBtn = el("useCurrentSectionStartBtn");
-const useCurrentSectionEndBtn = el("useCurrentSectionEndBtn");
-const addSectionBtn = el("addSectionBtn");
-const sectionsList = el("sectionsList");
-
-const toggleLoopBtn = el("toggleLoopBtn");
-const setLoopABtn = el("setLoopABtn");
-const setLoopBBtn = el("setLoopBBtn");
-const clearLoopBtn = el("clearLoopBtn");
-const loopRepeatsInput = el("loopRepeats");
-const loopStatus = el("loopStatus");
-
-const metronomeBpm = el("metronomeBpm");
-const metronomeBeatsPerBar = el("metronomeBeatsPerBar");
-const toggleMetronomeBtn = el("toggleMetronomeBtn");
-const resyncBtn = el("resyncBtn");
-
-const diagDrift = el("diagDrift");
-const diagCorrections = el("diagCorrections");
-const diagBuffering = el("diagBuffering");
-const diagLoops = el("diagLoops");
-
-const keyPlayPause = el("keyPlayPause");
-const keyRestart = el("keyRestart");
-const keyMute = el("keyMute");
-const keyLyricsFocus = el("keyLyricsFocus");
-const keyPracticeMode = el("keyPracticeMode");
-const keyMetronomeToggle = el("keyMetronomeToggle");
-const saveShortcutsBtn = el("saveShortcutsBtn");
-const resetShortcutsBtn = el("resetShortcutsBtn");
-const shortcutStatus = el("shortcutStatus");
-
-function setPresetStatus(text) {
-  presetStatus.textContent = text || "";
+function ensureNumber(value, fallback = 0) {
+  const n = Number.parseFloat(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
-function setCalibrateStatus(text) {
-  calibrateStatus.textContent = text || "";
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
-function setShortcutStatus(text) {
-  shortcutStatus.textContent = text || "";
+function round2(value) {
+  return Math.round(value * 100) / 100;
 }
 
-function getPlayerStatusEl(which) {
-  return which === "song" ? songPlayerStatus : pianoPlayerStatus;
+function genId(prefix) {
+  if (window.crypto?.randomUUID) return `${prefix}-${window.crypto.randomUUID()}`;
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function setPlayerStatus(which, state, label = "") {
-  const statusEl = getPlayerStatusEl(which);
-  if (!statusEl) return;
-  statusEl.dataset.state = state;
-  statusEl.textContent = label || PLAYER_STATUS_LABELS[state] || state;
+function safeGet(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw == null ? fallback : raw;
+  } catch {
+    return fallback;
+  }
 }
 
-function resetPlayerUiState(which) {
-  if (!playerUiState[which]) return;
-  playerUiState[which].hasStartedPlayback = false;
+function safeSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
-function getPlayerKeyFromTarget(target) {
-  if (target === songPlayer) return "song";
-  if (target === pianoPlayer) return "piano";
+function safeRemove(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore.
+  }
+}
+
+function normalizeShortcutValue(input, fallback) {
+  const value = String(input || "").trim();
+  if (!value) return fallback;
+  if (value.toLowerCase() === "space") return "Space";
+  if (value.length === 1) return value.toUpperCase();
+  return value;
+}
+
+function keyMatchesShortcut(event, shortcut) {
+  if (!shortcut) return false;
+  if (shortcut === "Space") return event.code === "Space";
+  if (shortcut.length === 1) return event.key.toUpperCase() === shortcut.toUpperCase();
+  return event.key === shortcut || event.code === shortcut;
+}
+
+function showToast(message, kind = "") {
+  const node = document.createElement("div");
+  node.className = "toast";
+  node.textContent = message;
+  if (kind === "danger") node.style.borderColor = "rgba(239,68,68,0.4)";
+  dom.toastRegion.appendChild(node);
+  setTimeout(() => node.remove(), 3200);
+}
+
+function extractYouTubeId(url) {
+  try {
+    const u = new URL(String(url).trim());
+    if (u.hostname.includes("youtu.be")) return u.pathname.replace("/", "");
+    if (u.searchParams.get("v")) return u.searchParams.get("v");
+    const parts = u.pathname.split("/").filter(Boolean);
+    return parts[parts.length - 1] || "";
+  } catch {
+    return "";
+  }
+}
+
+function getYouTubeInputIssue(label, rawUrl) {
+  const value = String(rawUrl || "").trim();
+  if (!value) return `${label} URL is required.`;
+  if (!extractYouTubeId(value)) return `${label} URL is not a valid YouTube link.`;
   return "";
 }
 
-function isPlayerReady(which) {
-  return which === "song" ? readySong : readyPiano;
+function fmtTime(sec) {
+  const safe = Math.max(0, Number(sec) || 0);
+  const minutes = Math.floor(safe / 60);
+  const seconds = Math.floor(safe % 60);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-function renderDiagnostics() {
-  diagDrift.textContent = `${Math.round(appState.diagnostics.driftMs)} ms`;
-  diagCorrections.textContent = String(appState.diagnostics.corrections);
-  diagBuffering.textContent = String(appState.diagnostics.bufferingEvents);
-  diagLoops.textContent = String(appState.diagnostics.loopCycles);
-}
-
-// --- Theme ---
-function getSystemThemeSafe() {
-  try {
-    if (window.matchMedia) {
-      const isLight = window.matchMedia("(prefers-color-scheme: light)").matches;
-      return isLight ? "light" : "dark";
+function parseLRC(text) {
+  const lines = [];
+  const re = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,2}))?\]\s*(.*)/g;
+  for (const row of String(text || "").split(/\r?\n/)) {
+    let match;
+    let matched = false;
+    while ((match = re.exec(row)) !== null) {
+      matched = true;
+      const mm = Number.parseInt(match[1], 10);
+      const ss = Number.parseInt(match[2], 10);
+      const cs = match[3] ? Number.parseInt(match[3].padEnd(2, "0"), 10) : 0;
+      const time = mm * 60 + ss + cs / 100;
+      const content = String(match[4] || "").trim();
+      if (content) lines.push({ t: time, content });
     }
-  } catch {
-    // Ignore and use dark fallback.
+    if (!matched && row.trim()) {
+      lines.push({ t: null, content: row.trim() });
+    }
+    re.lastIndex = 0;
   }
-  return "dark";
+  if (lines.some((line) => line.t != null)) {
+    return lines.filter((line) => line.t != null).sort((a, b) => a.t - b.t);
+  }
+  return lines.map((line) => ({ t: null, content: line.content }));
 }
 
-function resolveTheme(mode) {
-  if (mode === "light" || mode === "dark") return mode;
-  return getSystemThemeSafe();
+function getDefaultSettings() {
+  return JSON.parse(JSON.stringify(app.bootstrap?.defaultSettings || {
+    themeMode: "system",
+    autoEnterPracticeOnPlay: true,
+    showPracticeShortcutLegend: true,
+    markerRetargetThresholdSec: 5,
+    shortcuts: {
+      playPause: "Space",
+      restart: "R",
+      mute: "M",
+      lyricsFocus: "L",
+      practiceMode: "F",
+      metronomeToggle: "T",
+      toggleShortcutLegend: "H",
+      captureMarker: "Q"
+    }
+  }));
 }
 
-function updateThemeButtonLabel(mode, resolvedTheme) {
-  const mapping = {
-    system: "Auto",
-    dark: "Dark",
-    light: "Light"
+function getStoredSettingsOrDefault() {
+  try {
+    const raw = safeGet(STORAGE_KEYS.settings, null);
+    return raw ? JSON.parse(raw) : getDefaultSettings();
+  } catch {
+    return getDefaultSettings();
+  }
+}
+
+function normalizeSettings(settings) {
+  const defaults = getDefaultSettings();
+  const next = {
+    ...defaults,
+    ...settings,
+    shortcuts: {
+      ...defaults.shortcuts,
+      ...(settings?.shortcuts || {})
+    }
   };
-  themeBtn.textContent = `Theme: ${mapping[mode] || "Auto"}`;
-  themeBtn.title = `Theme mode (${mapping[mode] || "Auto"}, active: ${resolvedTheme})`;
+  next.themeMode = THEME_MODES.includes(next.themeMode) ? next.themeMode : defaults.themeMode;
+  next.markerRetargetThresholdSec = clamp(ensureNumber(next.markerRetargetThresholdSec, defaults.markerRetargetThresholdSec), 0.5, 30);
+  next.shortcuts.playPause = normalizeShortcutValue(next.shortcuts.playPause, defaults.shortcuts.playPause);
+  next.shortcuts.restart = normalizeShortcutValue(next.shortcuts.restart, defaults.shortcuts.restart);
+  next.shortcuts.mute = normalizeShortcutValue(next.shortcuts.mute, defaults.shortcuts.mute);
+  next.shortcuts.lyricsFocus = normalizeShortcutValue(next.shortcuts.lyricsFocus, defaults.shortcuts.lyricsFocus);
+  next.shortcuts.practiceMode = normalizeShortcutValue(next.shortcuts.practiceMode, defaults.shortcuts.practiceMode);
+  next.shortcuts.metronomeToggle = normalizeShortcutValue(next.shortcuts.metronomeToggle, defaults.shortcuts.metronomeToggle);
+  next.shortcuts.toggleShortcutLegend = normalizeShortcutValue(next.shortcuts.toggleShortcutLegend, defaults.shortcuts.toggleShortcutLegend);
+  next.shortcuts.captureMarker = normalizeShortcutValue(next.shortcuts.captureMarker, defaults.shortcuts.captureMarker);
+  return next;
 }
 
 function applyTheme(mode, persist = true) {
   const safeMode = THEME_MODES.includes(mode) ? mode : "system";
-  const resolvedTheme = resolveTheme(safeMode);
+  const resolved = safeMode === "system"
+    ? (window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark")
+    : safeMode;
   document.body.dataset.themeMode = safeMode;
-  document.body.dataset.theme = resolvedTheme;
-  updateThemeButtonLabel(safeMode, resolvedTheme);
-
-  if (persist) safeLocalStorageSet(THEME_STORAGE_KEY, safeMode);
-}
-
-function nextThemeMode(currentMode) {
-  const idx = THEME_MODES.indexOf(currentMode);
-  const nextIdx = idx === -1 ? 0 : (idx + 1) % THEME_MODES.length;
-  return THEME_MODES[nextIdx];
+  document.body.dataset.theme = resolved;
+  dom.themeBtn.textContent = `Theme: ${safeMode === "system" ? "Auto" : safeMode[0].toUpperCase() + safeMode.slice(1)}`;
+  if (persist) safeSet(STORAGE_KEYS.theme, safeMode);
 }
 
 function initTheme() {
-  let savedMode = "system";
-  const fromStorage = safeLocalStorageGet(THEME_STORAGE_KEY, null);
-  if (THEME_MODES.includes(fromStorage)) savedMode = fromStorage;
+  const stored = safeGet(STORAGE_KEYS.theme, null);
+  const preferred = THEME_MODES.includes(stored) ? stored : (app.settings?.themeMode || "system");
+  applyTheme(preferred, false);
+}
 
-  applyTheme(savedMode, false);
+function nextThemeMode(current) {
+  const index = THEME_MODES.indexOf(current);
+  return THEME_MODES[(index + 1) % THEME_MODES.length];
+}
 
-  if (window.matchMedia) {
-    prefersSchemeMql = window.matchMedia("(prefers-color-scheme: light)");
-    const onSystemChange = () => {
-      if (document.body.dataset.themeMode === "system") applyTheme("system", false);
-    };
-    if (typeof prefersSchemeMql.addEventListener === "function") {
-      prefersSchemeMql.addEventListener("change", onSystemChange);
-    } else if (typeof prefersSchemeMql.addListener === "function") {
-      prefersSchemeMql.addListener(onSystemChange);
+async function apiFetch(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set("Content-Type", "application/json");
+  const token = app.session?.access_token;
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(path, { ...options, headers });
+  const text = await response.text();
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { error: text };
     }
   }
-}
-
-// --- General UI ---
-function setConfigCollapsed(collapsed) {
-  configPanel.classList.toggle("is-collapsed", collapsed);
-  toggleConfigBtn.classList.toggle("is-collapsed", collapsed);
-  toggleConfigBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
-  toggleConfigBtn.setAttribute("title", collapsed ? "Expand setup" : "Collapse setup");
-}
-
-function setSyncing(value) {
-  isSyncing = value;
-  playIconPath.setAttribute("d", value ? PAUSE_ICON_PATH : PLAY_ICON_PATH);
-  metronome.syncWithPlayback(value);
-  if (value) startSyncLoop();
-  else stopSyncLoop();
-}
-
-function updateMuteIcon() {
-  if (!pianoPlayer || !pianoPlayer.isMuted) {
-    muteIconPath.setAttribute("d", MUTE_ICON_PATH);
-    return;
+  if (!response.ok) {
+    throw new Error(data?.error || `Request failed: ${response.status}`);
   }
-  muteIconPath.setAttribute("d", pianoPlayer.isMuted() ? UNMUTE_ICON_PATH : MUTE_ICON_PATH);
+  return data;
 }
 
-function togglePracticeMode() {
-  const next = !document.body.classList.contains("practice-mode");
-  document.body.classList.toggle("practice-mode", next);
-  practiceModeBtn.textContent = next ? "Exit practice" : "Fullscreen practice";
+function setBootstrapStatus(text) {
+  dom.bootstrapStatus.textContent = text;
+}
 
-  if (next) {
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-      document.documentElement.requestFullscreen().catch(() => {});
+function setEditorStatus(text) {
+  dom.editorStatus.textContent = text;
+}
+
+function setCalibrateStatus(text) {
+  dom.calibrateStatus.textContent = text;
+}
+
+function setShortcutStatus(text) {
+  dom.shortcutStatus.textContent = text;
+}
+
+function setPlayerStatus(which, state, label = "") {
+  const target = which === "song" ? dom.songPlayerStatus : dom.pianoPlayerStatus;
+  target.dataset.state = state;
+  target.textContent = label || PLAYER_STATUS_LABELS[state] || state;
+}
+
+function setAuthIndicator() {
+  const authed = Boolean(app.session?.user);
+  dom.authIndicator.dataset.state = authed ? "authenticated" : "guest";
+  dom.authIndicator.textContent = authed ? "Logged in" : "Guest";
+  dom.loginBtn.classList.toggle("hidden", authed);
+  dom.signupBtn.classList.toggle("hidden", authed);
+  dom.profileBtn.classList.toggle("hidden", !authed);
+  dom.logoutBtn.classList.toggle("hidden", !authed);
+}
+
+function applySettingsToInputs() {
+  const settings = app.settings;
+  dom.autoPracticeOnPlay.value = String(Boolean(settings.autoEnterPracticeOnPlay));
+  dom.showPracticeShortcutLegend.value = String(Boolean(settings.showPracticeShortcutLegend));
+  dom.markerRetargetThreshold.value = String(round2(settings.markerRetargetThresholdSec));
+  dom.keyPlayPause.value = settings.shortcuts.playPause;
+  dom.keyRestart.value = settings.shortcuts.restart;
+  dom.keyMute.value = settings.shortcuts.mute;
+  dom.keyLyricsFocus.value = settings.shortcuts.lyricsFocus;
+  dom.keyPracticeMode.value = settings.shortcuts.practiceMode;
+  dom.keyMetronomeToggle.value = settings.shortcuts.metronomeToggle;
+  dom.keyToggleShortcutLegend.value = settings.shortcuts.toggleShortcutLegend;
+  dom.keyCaptureMarker.value = settings.shortcuts.captureMarker;
+  dom.markerThresholdHint.textContent = `Capture moves the nearest label within ${round2(settings.markerRetargetThresholdSec)} seconds.`;
+  app.practiceHelperVisible = Boolean(settings.showPracticeShortcutLegend);
+  renderPracticeHelperVisibility();
+}
+
+function readSettingsFromInputs() {
+  return normalizeSettings({
+    themeMode: document.body.dataset.themeMode || "system",
+    autoEnterPracticeOnPlay: dom.autoPracticeOnPlay.value === "true",
+    showPracticeShortcutLegend: dom.showPracticeShortcutLegend.value === "true",
+    markerRetargetThresholdSec: ensureNumber(dom.markerRetargetThreshold.value, 5),
+    shortcuts: {
+      playPause: dom.keyPlayPause.value,
+      restart: dom.keyRestart.value,
+      mute: dom.keyMute.value,
+      lyricsFocus: dom.keyLyricsFocus.value,
+      practiceMode: dom.keyPracticeMode.value,
+      metronomeToggle: dom.keyMetronomeToggle.value,
+      toggleShortcutLegend: dom.keyToggleShortcutLegend.value,
+      captureMarker: dom.keyCaptureMarker.value
     }
-  } else if (document.fullscreenElement && document.exitFullscreen) {
-    document.exitFullscreen().catch(() => {});
-  }
-
-  renderLyrics();
-  if (canSync()) setActiveLyricByTime(getMasterTime());
-}
-
-function onFullscreenChange() {
-  if (!document.fullscreenElement && document.body.classList.contains("practice-mode")) {
-    document.body.classList.remove("practice-mode");
-    practiceModeBtn.textContent = "Fullscreen practice";
-    renderLyrics();
-    if (canSync()) setActiveLyricByTime(getMasterTime());
-  }
-}
-
-// --- Lyrics ---
-function getCompactLyricsText() {
-  if (!lyrics.length) return "";
-  return lyrics
-    .map((line) => String(line.content || "").replace(/\s+/g, " ").trim())
-    .filter(Boolean)
-    .join(" ; ");
-}
-
-function updatePracticeCurrentLyric(idx) {
-  if (!practiceCurrentLyricEl) return;
-  const safeIdx = clamp(Math.floor(ensureNumber(idx, 0)), 0, Math.max(0, lyrics.length - 1));
-  const current = lyrics[safeIdx];
-  practiceCurrentLyricEl.textContent = current?.content || "No active lyric";
-}
-
-function fitPracticeLyricsToBox() {
-  if (!practiceCompactLyricsEl) return;
-  const node = practiceCompactLyricsEl;
-  if (node.clientHeight <= 0 || node.clientWidth <= 0) return;
-
-  let lo = 7;
-  let hi = 22;
-  let best = 8;
-  while (lo <= hi) {
-    const mid = Math.floor((lo + hi) / 2);
-    node.style.fontSize = `${mid}px`;
-    if (node.scrollHeight <= node.clientHeight && node.scrollWidth <= node.clientWidth) {
-      best = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-  node.style.fontSize = `${best}px`;
-}
-
-function schedulePracticeLyricsFit() {
-  if (!document.body.classList.contains("practice-mode")) return;
-  if (practiceFitRaf) cancelAnimationFrame(practiceFitRaf);
-  practiceFitRaf = requestAnimationFrame(() => {
-    practiceFitRaf = 0;
-    fitPracticeLyricsToBox();
   });
 }
 
-function renderPracticeLyricsLayout() {
-  lyricsBox.innerHTML = "";
-  practiceCurrentLyricEl = null;
-  practiceCompactLyricsEl = null;
-
-  const wrap = document.createElement("div");
-  wrap.className = "practiceLyricsWrap";
-
-  const current = document.createElement("div");
-  current.className = "practiceCurrentLine";
-  current.textContent = lyrics[0]?.content || "No active lyric";
-
-  const all = document.createElement("div");
-  all.className = "practiceCompactLyrics";
-  all.textContent = getCompactLyricsText();
-
-  wrap.append(current, all);
-  lyricsBox.appendChild(wrap);
-  practiceCurrentLyricEl = current;
-  practiceCompactLyricsEl = all;
-  updatePracticeCurrentLyric(lastActiveIdx < 0 ? 0 : lastActiveIdx);
-  schedulePracticeLyricsFit();
+function applySettings(settings, persistLocal = true) {
+  app.settings = normalizeSettings(settings);
+  applySettingsToInputs();
+  applyTheme(app.settings.themeMode, persistLocal);
+  renderPracticeHelper();
+  renderShortcutsModal();
+  if (persistLocal) safeSet(STORAGE_KEYS.settings, JSON.stringify(app.settings));
 }
 
-function renderLyrics() {
-  lyricsBox.innerHTML = "";
-  practiceCurrentLyricEl = null;
-  practiceCompactLyricsEl = null;
-
-  if (!lyrics.length) {
-    lyricsBox.innerHTML = '<div class="small">No lyrics loaded yet. Paste lyrics and click "Use pasted lyrics".</div>';
-    return;
-  }
-
-  if (document.body.classList.contains("practice-mode")) {
-    renderPracticeLyricsLayout();
-    return;
-  }
-
-  lyrics.forEach((line, idx) => {
-    const div = document.createElement("div");
-    div.className = "line";
-    div.dataset.idx = String(idx);
-    div.textContent = (line.t != null ? `[${fmtTime(line.t)}] ` : "") + line.content;
-    lyricsBox.appendChild(div);
-  });
-
-  lastActiveIdx = -1;
-}
-
-function setActiveLyricByTime(t) {
-  if (!lyrics.length) return;
-
-  if (lyrics[0].t == null) {
-    if (document.body.classList.contains("practice-mode")) updatePracticeCurrentLyric(0);
-    return;
-  }
-
-  let lo = 0;
-  let hi = lyrics.length - 1;
-  let ans = -1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    if (lyrics[mid].t <= t) {
-      ans = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-
-  if (ans < 0) ans = 0;
-  if (ans === lastActiveIdx) return;
-
-  if (document.body.classList.contains("practice-mode")) {
-    updatePracticeCurrentLyric(ans);
-    lastActiveIdx = ans;
-    return;
-  }
-
-  const prev = lyricsBox.querySelector(".line.active");
-  if (prev) prev.classList.remove("active");
-
-  const curr = lyricsBox.querySelector(`.line[data-idx="${ans}"]`);
-  if (curr) {
-    curr.classList.add("active");
-    if (!document.body.classList.contains("practice-mode")) {
-      curr.scrollIntoView({ block: "center", behavior: "auto" });
-    }
-  }
-  lastActiveIdx = ans;
-}
-
-function usePastedLyrics() {
-  const text = el("lyricsPaste").value.trim();
-  lyrics = text ? parseLRC(text) : [];
-  renderLyrics();
-  if (canSync()) setActiveLyricByTime(getMasterTime());
-  scheduleAutosave();
-}
-
-// --- Marker manager ---
-function populateMarkerKeys() {
-  markerKey.innerHTML = "";
-  for (const key of MARKER_KEYS) {
-    const opt = document.createElement("option");
-    opt.value = key;
-    opt.textContent = key;
-    markerKey.appendChild(opt);
+function populateSectionShortcutOptions() {
+  dom.sectionShortcut.innerHTML = "";
+  for (const key of SECTION_SHORTCUT_KEYS) {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = key || "None";
+    dom.sectionShortcut.appendChild(option);
   }
 }
 
-function markerToMasterTime(marker) {
-  const raw = Math.max(0, ensureNumber(marker.timeSec, 0));
-  if (marker.source === "piano") return Math.max(0, raw - pianoStartSec);
-  return Math.max(0, raw - songStartSec);
-}
-
-function masterToSourceTime(source, master) {
-  const safeMaster = Math.max(0, ensureNumber(master, 0));
-  if (source === "piano") return safeMaster + pianoStartSec;
-  return safeMaster + songStartSec;
-}
-
-function normalizeMarker(raw) {
+function normalizeMarker(raw, idx = 0) {
   if (!raw) return null;
-  const key = String(raw.key ?? "").trim();
-  if (!MARKER_KEYS.includes(key)) return null;
+  const label = String(raw.label || raw.name || "").trim() || `Label ${idx + 1}`;
+  return {
+    id: String(raw.id || genId("marker")).trim(),
+    label,
+    masterTimeSec: Math.max(0, ensureNumber(raw.masterTimeSec ?? raw.timeSec ?? 0, 0))
+  };
+}
 
-  const sourceRaw = String(raw.source || "song").toLowerCase();
-  const source = sourceRaw === "piano" || sourceRaw === "tutorial" ? "piano" : "song";
-  const timeSec = Math.max(0, ensureNumber(raw.timeSec ?? raw.time ?? 0, 0));
-  const fallbackName = source === "piano" ? `Tutorial ${key}` : `Clip ${key}`;
-  const name = String(raw.name || fallbackName).trim() || fallbackName;
-  return { key, source, timeSec, name };
+function normalizeSection(raw, idx = 0) {
+  if (!raw) return null;
+  const startSec = Math.max(0, ensureNumber(raw.startSec, 0));
+  let endSec = raw.endSec == null || raw.endSec === "" ? null : Math.max(0, ensureNumber(raw.endSec, 0));
+  if (endSec != null && endSec <= startSec) endSec = null;
+  const shortcut = normalizeShortcutValue(raw.shortcut || "", "");
+  return {
+    id: String(raw.id || genId("section")).trim(),
+    name: String(raw.name || "").trim() || `Section ${idx + 1}`,
+    color: /^#[0-9a-f]{6}$/i.test(String(raw.color || "")) ? String(raw.color) : "#4f8cff",
+    startSec,
+    endSec,
+    repeatCount: Math.max(0, Math.floor(ensureNumber(raw.repeatCount, 4))),
+    shortcut: SECTION_SHORTCUT_KEYS.includes(shortcut) ? shortcut : ""
+  };
 }
 
 function sortMarkers() {
-  appState.markers.sort((a, b) => Number(a.key) - Number(b.key));
+  app.markers.sort((a, b) => a.masterTimeSec - b.masterTimeSec);
 }
 
-function upsertMarker(marker) {
-  const idx = appState.markers.findIndex((m) => m.key === marker.key);
-  if (idx >= 0) appState.markers[idx] = marker;
-  else appState.markers.push(marker);
-  sortMarkers();
-  renderMarkersList();
-  renderShortcutsList();
-  scheduleAutosave();
+function sortSections() {
+  app.sections.sort((a, b) => a.startSec - b.startSec);
 }
 
-function renderMarkersList() {
-  markersList.innerHTML = "";
+function renderLobby() {
+  dom.lobbyGrid.innerHTML = "";
+  const filter = app.searchTerm.trim().toLowerCase();
+  const visibleSongs = app.songs.filter((song) => {
+    if (!filter) return true;
+    return [song.title, song.artist, song.summary, song.description]
+      .join(" ")
+      .toLowerCase()
+      .includes(filter);
+  });
 
-  if (!appState.markers.length) {
-    markersList.textContent = "No labels yet.";
+  if (!visibleSongs.length) {
+    const empty = document.createElement("div");
+    empty.className = "songCard";
+    empty.innerHTML = "<h3>No songs found</h3><p class='muted'>Try a different search, or create a new sync if you are logged in.</p>";
+    dom.lobbyGrid.appendChild(empty);
     return;
   }
 
-  for (const marker of appState.markers) {
+  for (const song of visibleSongs) {
+    const card = document.createElement("article");
+    card.className = "songCard";
+    card.innerHTML = `
+      <div>
+        <p class="eyebrow">${escapeHtml(song.artist)}</p>
+        <h3>${escapeHtml(song.title)}</h3>
+      </div>
+      <p class="muted">${escapeHtml(song.summary || "Practice sync ready for the dual-player workspace.")}</p>
+      <div class="songMetaRow">
+        <span class="pill">${song.markerCount} labels</span>
+        <span class="pill">${song.sectionCount} sections</span>
+        <span class="pill">${song.ownerDisplayName || "sync.tvguitar.com"}</span>
+      </div>
+    `;
+
+    const actions = document.createElement("div");
+    actions.className = "songCardActions";
+
+    const openBtn = document.createElement("button");
+    openBtn.className = "primary";
+    openBtn.type = "button";
+    openBtn.textContent = "Open song";
+    openBtn.addEventListener("click", () => loadSong(song.id));
+
+    actions.appendChild(openBtn);
+    if (song.canEdit) {
+      const editNote = document.createElement("span");
+      editNote.className = "pill";
+      editNote.textContent = "You can edit this";
+      actions.appendChild(editNote);
+    }
+    card.appendChild(actions);
+    dom.lobbyGrid.appendChild(card);
+  }
+}
+
+function applySongToForm(song) {
+  app.currentSongId = song.id || "";
+  app.currentSongCanEdit = Boolean(song.canEdit);
+  app.currentSongOwner = song.ownerDisplayName || "";
+  dom.songTitle.value = song.title || "";
+  dom.songArtist.value = song.artist || "";
+  dom.songSummary.value = song.summary || "";
+  dom.songUrl.value = song.officialClipUrl || "";
+  dom.pianoUrl.value = song.tutorialUrl || "";
+  dom.songOffset.value = String(round2(song.songStartSec || 0));
+  dom.pianoOffset.value = String(round2(song.tutorialStartSec || 0));
+  dom.countdownSec.value = String(song.countdownSec ?? 4);
+  dom.publishSongToggle.value = String(song.published !== false);
+  dom.metronomeBpm.value = String(song.metronomeBpm ?? 92);
+  dom.metronomeBeatsPerBar.value = String(song.metronomeBeatsPerBar ?? 4);
+  dom.lyricsPaste.value = song.lyrics || "";
+  app.lyrics = dom.lyricsPaste.value.trim() ? parseLRC(dom.lyricsPaste.value.trim()) : [];
+  app.markers = Array.isArray(song.markers) ? song.markers.map(normalizeMarker).filter(Boolean) : [];
+  app.sections = Array.isArray(song.sections) ? song.sections.map(normalizeSection).filter(Boolean) : [];
+  sortMarkers();
+  sortSections();
+  renderLyrics();
+  renderMarkersList();
+  renderSectionsList();
+  renderPracticeHelper();
+  renderShortcutsModal();
+  renderEditorHeader(song);
+  readOffsets();
+  metronome.setBpm(ensureNumber(dom.metronomeBpm.value, 92));
+  metronome.setBeatsPerBar(ensureNumber(dom.metronomeBeatsPerBar.value, 4));
+}
+
+function renderEditorHeader(song = null) {
+  if (song) {
+    dom.workspaceTitle.textContent = `${song.artist || "Artist"} — ${song.title || "Untitled song"}`;
+    const canEdit = Boolean(song.canEdit && app.session?.user);
+    dom.editorModeBadge.textContent = canEdit ? "Owner workspace" : "Practice workspace";
+    if (canEdit) {
+      setEditorStatus("You can update this published song directly.");
+      dom.saveSongBtn.disabled = false;
+      dom.saveSongBtn.textContent = "Save changes";
+    } else {
+      setEditorStatus("You can practice this song. Save is enabled only for songs you own or new songs you publish.");
+      dom.saveSongBtn.disabled = !app.session?.user;
+      dom.saveSongBtn.textContent = "Publish your own version";
+    }
+    return;
+  }
+
+  dom.workspaceTitle.textContent = app.session?.user
+    ? "New song draft"
+    : "Guest practice draft";
+  dom.editorModeBadge.textContent = app.session?.user ? "Draft workspace" : "Guest workspace";
+  setEditorStatus(app.session?.user
+    ? "Build a new sync song, load the players, and publish when it feels right."
+    : "You can practice and prepare locally. Log in to publish or edit your songs.");
+  dom.saveSongBtn.disabled = !app.session?.user;
+  dom.saveSongBtn.textContent = "Publish song";
+}
+
+function renderProfile() {
+  dom.profileNameText.textContent = app.profile?.displayName || app.session?.user?.email || "Guest";
+  dom.profileEmailText.textContent = app.profile?.email || "";
+  dom.deleteAccountBtn.disabled = !app.profile?.deletionEnabled;
+  dom.deleteAccountStatus.textContent = app.profile?.deletionEnabled
+    ? "Deleting your account will remove your local profile data and request Supabase account deletion. Published songs may remain visible."
+    : "Self-serve deletion is disabled until a Supabase service role key is configured on the server.";
+}
+
+function renderMySongs() {
+  dom.mySongsList.innerHTML = "";
+  if (!app.session?.user) {
+    dom.mySongsList.textContent = "Log in to see your songs.";
+    return;
+  }
+  if (!app.mySongs.length) {
+    dom.mySongsList.textContent = "No published or draft songs yet.";
+    return;
+  }
+  for (const song of app.mySongs) {
     const row = document.createElement("div");
     row.className = "markerRow";
+    row.innerHTML = `
+      <div class="markerMeta">
+        <strong>${escapeHtml(song.title)}</strong>
+        <span class="muted">${escapeHtml(song.artist)} · ${song.published ? "Published" : "Hidden draft"}</span>
+      </div>
+    `;
+    const actions = document.createElement("div");
+    actions.className = "markerActions";
+    const openBtn = document.createElement("button");
+    openBtn.type = "button";
+    openBtn.textContent = "Open";
+    openBtn.addEventListener("click", () => {
+      closeModal(dom.profileModal);
+      loadSong(song.id);
+    });
+    actions.appendChild(openBtn);
+    row.appendChild(actions);
+    dom.mySongsList.appendChild(row);
+  }
+}
 
+function renderMarkersList() {
+  dom.markersList.innerHTML = "";
+  if (!app.markers.length) {
+    dom.markersList.textContent = "No labels yet.";
+    renderPracticeHelper();
+    renderShortcutsModal();
+    return;
+  }
+
+  const assignments = getMarkerJumpAssignments();
+  for (const marker of app.markers) {
+    const row = document.createElement("div");
+    row.className = "markerRow";
+    const jumpKey = assignments.get(marker.id) || "—";
     const meta = document.createElement("div");
     meta.className = "markerMeta";
-    const sourceLabel = marker.source === "piano" ? "tutorial" : "official";
-    meta.textContent = `[${marker.key}] ${marker.name} (${sourceLabel} ${fmtTime(marker.timeSec)})`;
-
+    meta.innerHTML = `
+      <strong>${escapeHtml(marker.label)}</strong>
+      <span class="muted">${fmtTime(marker.masterTimeSec)} · jump ${escapeHtml(jumpKey)}</span>
+    `;
     const actions = document.createElement("div");
     actions.className = "markerActions";
 
     const jumpBtn = document.createElement("button");
     jumpBtn.type = "button";
     jumpBtn.textContent = "Jump";
-    jumpBtn.addEventListener("click", () => jumpToMarkerKey(marker.key));
+    jumpBtn.addEventListener("click", () => jumpToMarker(marker.id));
 
     const editBtn = document.createElement("button");
     editBtn.type = "button";
     editBtn.textContent = "Edit";
     editBtn.addEventListener("click", () => {
-      markerName.value = marker.name;
-      markerKey.value = marker.key;
-      markerSource.value = marker.source;
-      markerTime.value = String(round2(marker.timeSec));
+      dom.markerName.value = marker.label;
+      dom.markerTime.value = String(round2(marker.masterTimeSec));
+      dom.markerName.dataset.editId = marker.id;
     });
 
-    const delBtn = document.createElement("button");
-    delBtn.type = "button";
-    delBtn.textContent = "Delete";
-    delBtn.addEventListener("click", () => {
-      appState.markers = appState.markers.filter((m) => m.key !== marker.key);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.textContent = "Delete";
+    deleteBtn.addEventListener("click", () => {
+      app.markers = app.markers.filter((item) => item.id !== marker.id);
       renderMarkersList();
-      renderShortcutsList();
       scheduleAutosave();
     });
 
-    actions.append(jumpBtn, editBtn, delBtn);
+    actions.append(jumpBtn, editBtn, deleteBtn);
     row.append(meta, actions);
-    markersList.appendChild(row);
+    dom.markersList.appendChild(row);
   }
-}
-
-function setMarkerTimeFromCurrent() {
-  const source = markerSource.value === "piano" ? "piano" : "song";
-  const master = canSync() ? getMasterTime() : ensureNumber(scrubber.value, 0);
-  markerTime.value = String(round2(masterToSourceTime(source, master)));
-}
-
-function addOrUpdateMarkerFromForm() {
-  const raw = normalizeMarker({
-    key: markerKey.value,
-    source: markerSource.value,
-    timeSec: ensureNumber(markerTime.value, 0),
-    name: markerName.value.trim()
-  });
-
-  if (!raw) {
-    alert("Invalid label. Set key 1-9 and a valid time.");
-    return;
-  }
-
-  upsertMarker(raw);
-}
-
-function jumpToMarkerKey(key) {
-  const marker = appState.markers.find((m) => m.key === key);
-  if (!marker || !canSync()) return;
-
-  cancelCountdown();
-  songPlayer.pauseVideo();
-  pianoPlayer.pauseVideo();
-  setSyncing(false);
-  safeSeekBoth(markerToMasterTime(marker));
-}
-
-// --- Sections ---
-function populateSectionShortcutOptions() {
-  sectionShortcut.innerHTML = "";
-  for (const key of SECTION_SHORTCUT_KEYS) {
-    const opt = document.createElement("option");
-    opt.value = key;
-    opt.textContent = key || "None";
-    sectionShortcut.appendChild(opt);
-  }
-}
-
-function normalizeSection(raw) {
-  if (!raw) return null;
-  const startSec = Math.max(0, ensureNumber(raw.startSec, 0));
-  let endSec = raw.endSec === "" || raw.endSec == null ? null : Math.max(0, ensureNumber(raw.endSec, 0));
-  if (endSec != null && endSec <= startSec) endSec = null;
-
-  const repeatCount = Math.max(0, Math.floor(ensureNumber(raw.repeatCount, 0)));
-  const name = String(raw.name || "").trim() || `Section ${appState.sections.length + 1}`;
-  const color = String(raw.color || "#2f7cff");
-  const shortcutRaw = String(raw.shortcut || "").toUpperCase();
-  const shortcut = SECTION_SHORTCUT_KEYS.includes(shortcutRaw) ? shortcutRaw : "";
-
-  return {
-    id: raw.id || genId("section"),
-    name,
-    color,
-    startSec,
-    endSec,
-    repeatCount,
-    shortcut
-  };
-}
-
-function upsertSection(section) {
-  const idx = appState.sections.findIndex((s) => s.id === section.id);
-  if (idx >= 0) appState.sections[idx] = section;
-  else appState.sections.push(section);
-
-  appState.sections.sort((a, b) => a.startSec - b.startSec);
-  renderSectionsList();
-  renderShortcutsList();
-  scheduleAutosave();
-}
-
-function setSectionStartFromCurrent() {
-  const master = canSync() ? getMasterTime() : ensureNumber(scrubber.value, 0);
-  sectionStart.value = String(round2(master));
-}
-
-function setSectionEndFromCurrent() {
-  const master = canSync() ? getMasterTime() : ensureNumber(scrubber.value, 0);
-  sectionEnd.value = String(round2(master));
-}
-
-function addOrUpdateSectionFromForm() {
-  const existingId = sectionName.dataset.editId || "";
-  const section = normalizeSection({
-    id: existingId || undefined,
-    name: sectionName.value,
-    color: sectionColor.value,
-    startSec: sectionStart.value,
-    endSec: sectionEnd.value,
-    repeatCount: sectionRepeat.value,
-    shortcut: sectionShortcut.value
-  });
-
-  if (!section) {
-    alert("Invalid section values.");
-    return;
-  }
-
-  if (section.shortcut) {
-    for (const s of appState.sections) {
-      if (s.shortcut === section.shortcut && s.id !== section.id) {
-        s.shortcut = "";
-      }
-    }
-  }
-
-  upsertSection(section);
-  sectionName.dataset.editId = "";
+  renderPracticeHelper();
+  renderShortcutsModal();
 }
 
 function renderSectionsList() {
-  sectionsList.innerHTML = "";
-  if (!appState.sections.length) {
-    sectionsList.textContent = "No sections yet.";
+  dom.sectionsList.innerHTML = "";
+  if (!app.sections.length) {
+    dom.sectionsList.textContent = "No sections yet.";
+    renderPracticeHelper();
+    renderShortcutsModal();
     return;
   }
-
-  for (const section of appState.sections) {
+  for (const section of app.sections) {
     const row = document.createElement("div");
     row.className = "markerRow";
-
+    const endText = section.endSec == null ? "end" : fmtTime(section.endSec);
     const meta = document.createElement("div");
     meta.className = "markerMeta";
-    const chip = document.createElement("span");
-    chip.className = "sectionChip";
-    chip.style.background = section.color;
-
-    const rangeLabel = section.endSec == null
-      ? `${fmtTime(section.startSec)} -> end`
-      : `${fmtTime(section.startSec)} -> ${fmtTime(section.endSec)}`;
-    const repeatLabel = section.endSec == null ? "" : ` | loop:${section.repeatCount === 0 ? "inf" : section.repeatCount}`;
-    const shortcutLabel = section.shortcut ? ` | ${section.shortcut}` : "";
-
-    const text = document.createElement("span");
-    text.textContent = `${section.name} (${rangeLabel}${repeatLabel}${shortcutLabel})`;
-    meta.append(chip, text);
-
+    meta.innerHTML = `
+      <div><span class="sectionChip" style="background:${escapeHtml(section.color)}"></span><strong>${escapeHtml(section.name)}</strong></div>
+      <span class="muted">${fmtTime(section.startSec)} → ${endText}${section.shortcut ? ` · ${escapeHtml(section.shortcut)}` : ""}</span>
+    `;
     const actions = document.createElement("div");
     actions.className = "markerActions";
 
-    const jumpBtn = document.createElement("button");
-    jumpBtn.type = "button";
-    jumpBtn.textContent = "Jump";
-    jumpBtn.addEventListener("click", () => {
-      safeSeekBoth(section.startSec);
-      appState.playWindowEnd = section.endSec == null ? null : section.endSec;
-    });
-
-    const playBtnEl = document.createElement("button");
-    playBtnEl.type = "button";
-    playBtnEl.textContent = "Play";
-    playBtnEl.addEventListener("click", () => playSection(section, false));
+    const playBtn = document.createElement("button");
+    playBtn.type = "button";
+    playBtn.textContent = "Play";
+    playBtn.addEventListener("click", () => playSection(section, false));
 
     const loopBtn = document.createElement("button");
     loopBtn.type = "button";
@@ -932,223 +876,542 @@ function renderSectionsList() {
     editBtn.type = "button";
     editBtn.textContent = "Edit";
     editBtn.addEventListener("click", () => {
-      sectionName.value = section.name;
-      sectionName.dataset.editId = section.id;
-      sectionColor.value = section.color;
-      sectionStart.value = String(round2(section.startSec));
-      sectionEnd.value = section.endSec == null ? "" : String(round2(section.endSec));
-      sectionRepeat.value = String(section.repeatCount);
-      sectionShortcut.value = section.shortcut || "";
+      dom.sectionName.value = section.name;
+      dom.sectionName.dataset.editId = section.id;
+      dom.sectionColor.value = section.color;
+      dom.sectionStart.value = String(round2(section.startSec));
+      dom.sectionEnd.value = section.endSec == null ? "" : String(round2(section.endSec));
+      dom.sectionRepeat.value = String(section.repeatCount);
+      dom.sectionShortcut.value = section.shortcut || "";
     });
 
-    const delBtn = document.createElement("button");
-    delBtn.type = "button";
-    delBtn.textContent = "Delete";
-    delBtn.addEventListener("click", () => {
-      appState.sections = appState.sections.filter((s) => s.id !== section.id);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.textContent = "Delete";
+    deleteBtn.addEventListener("click", () => {
+      app.sections = app.sections.filter((item) => item.id !== section.id);
       renderSectionsList();
-      renderShortcutsList();
       scheduleAutosave();
     });
 
-    actions.append(jumpBtn, playBtnEl, loopBtn, editBtn, delBtn);
+    actions.append(playBtn, loopBtn, editBtn, deleteBtn);
     row.append(meta, actions);
-    sectionsList.appendChild(row);
+    dom.sectionsList.appendChild(row);
+  }
+  renderPracticeHelper();
+  renderShortcutsModal();
+}
+
+function getMarkerJumpAssignments() {
+  const reserved = new Set([
+    app.settings.shortcuts.playPause,
+    app.settings.shortcuts.restart,
+    app.settings.shortcuts.mute,
+    app.settings.shortcuts.lyricsFocus,
+    app.settings.shortcuts.practiceMode,
+    app.settings.shortcuts.metronomeToggle,
+    app.settings.shortcuts.toggleShortcutLegend,
+    app.settings.shortcuts.captureMarker
+  ].map((value) => String(value || "").toUpperCase()).filter(Boolean));
+
+  for (const section of app.sections) {
+    if (section.shortcut) reserved.add(section.shortcut.toUpperCase());
+  }
+
+  const assignments = new Map();
+  const usable = MARKER_JUMP_POOL.filter((key) => !reserved.has(key.toUpperCase()));
+  app.markers.forEach((marker, idx) => {
+    if (usable[idx]) assignments.set(marker.id, usable[idx]);
+  });
+  return assignments;
+}
+
+function renderPracticeHelper() {
+  renderPracticeHelperVisibility();
+  const shortcutRows = [
+    { key: app.settings.shortcuts.playPause, action: "Play / pause" },
+    { key: app.settings.shortcuts.restart, action: "Restart" },
+    { key: app.settings.shortcuts.captureMarker, action: "Capture / retarget label" },
+    { key: app.settings.shortcuts.toggleShortcutLegend, action: "Show / hide helper" },
+    { key: app.settings.shortcuts.practiceMode, action: "Toggle fullscreen practice" },
+    { key: "Left / Right", action: "Seek 5 seconds" }
+  ];
+
+  dom.practiceShortcutSummary.innerHTML = "";
+  for (const row of shortcutRows) {
+    const item = document.createElement("div");
+    item.className = "shortcutRow";
+    item.innerHTML = `<strong>${escapeHtml(row.key)}</strong><span>${escapeHtml(row.action)}</span>`;
+    dom.practiceShortcutSummary.appendChild(item);
+  }
+
+  dom.markerJumpLegend.innerHTML = "";
+  const assignments = getMarkerJumpAssignments();
+  if (!assignments.size) {
+    dom.markerJumpLegend.textContent = "No labels assigned yet.";
+    return;
+  }
+  for (const marker of app.markers) {
+    const key = assignments.get(marker.id);
+    if (!key) continue;
+    const row = document.createElement("div");
+    row.className = "markerJumpRow";
+    row.innerHTML = `<strong>${escapeHtml(key)}</strong><span>${escapeHtml(marker.label)} · ${fmtTime(marker.masterTimeSec)}</span>`;
+    dom.markerJumpLegend.appendChild(row);
   }
 }
 
-function findSectionByShortcut(key) {
-  const upper = key.toUpperCase();
-  return appState.sections.find((s) => s.shortcut === upper);
+function renderPracticeHelperVisibility() {
+  dom.practiceHelper.classList.toggle("hidden", !app.practiceHelperVisible);
+  dom.togglePracticeHelperBtn.textContent = app.practiceHelperVisible ? "Hide helper" : "Show helper";
 }
 
-function playSection(section, enableLoop) {
-  if (!canSync()) return;
+function renderShortcutsModal() {
+  dom.shortcutsList.innerHTML = "";
+  const rows = [
+    { key: app.settings.shortcuts.playPause, action: "Play or pause both videos" },
+    { key: app.settings.shortcuts.restart, action: "Restart from the beginning" },
+    { key: app.settings.shortcuts.mute, action: "Mute tutorial" },
+    { key: app.settings.shortcuts.lyricsFocus, action: "Expand lyrics focus" },
+    { key: app.settings.shortcuts.practiceMode, action: "Toggle fullscreen practice" },
+    { key: app.settings.shortcuts.metronomeToggle, action: "Toggle metronome" },
+    { key: app.settings.shortcuts.toggleShortcutLegend, action: "Show or hide practice helper" },
+    { key: app.settings.shortcuts.captureMarker, action: "Capture or retarget a timeline label" }
+  ];
 
-  cancelCountdown();
-  songPlayer.pauseVideo();
-  pianoPlayer.pauseVideo();
-  setSyncing(false);
-
-  safeSeekBoth(section.startSec);
-  appState.playWindowEnd = section.endSec == null ? duration : section.endSec;
-
-  if (enableLoop && section.endSec != null) {
-    appState.loop.enabled = true;
-    appState.loop.aSec = section.startSec;
-    appState.loop.bSec = section.endSec;
-    appState.loop.repeatTarget = section.repeatCount;
-    appState.loop.completed = 0;
-  } else {
-    appState.loop.enabled = false;
-    appState.loop.completed = 0;
+  const assignments = getMarkerJumpAssignments();
+  if (assignments.size) {
+    rows.push({
+      key: "Jump keys",
+      action: app.markers.map((marker) => `${assignments.get(marker.id) || "—"} → ${marker.label}`).join(" | ")
+    });
   }
 
-  renderLoopStatus();
-  startPlaybackWithCountdown();
+  for (const row of rows) {
+    const item = document.createElement("div");
+    item.className = "shortcutRow";
+    item.innerHTML = `<strong>${escapeHtml(row.key)}</strong><span>${escapeHtml(row.action)}</span>`;
+    dom.shortcutsList.appendChild(item);
+  }
 }
 
-// --- Shortcuts ---
-function loadShortcutInputsFromState() {
-  keyPlayPause.value = appState.shortcuts.playPause;
-  keyRestart.value = appState.shortcuts.restart;
-  keyMute.value = appState.shortcuts.mute;
-  keyLyricsFocus.value = appState.shortcuts.lyricsFocus;
-  keyPracticeMode.value = appState.shortcuts.practiceMode;
-  keyMetronomeToggle.value = appState.shortcuts.metronomeToggle;
+function renderLyrics() {
+  dom.lyricsBox.innerHTML = "";
+  if (!app.lyrics.length) {
+    dom.lyricsBox.innerHTML = '<div class="small muted">No lyrics loaded yet.</div>';
+    return;
+  }
+  for (const [idx, line] of app.lyrics.entries()) {
+    const div = document.createElement("div");
+    div.className = "line";
+    div.dataset.idx = String(idx);
+    div.textContent = (line.t != null ? `[${fmtTime(line.t)}] ` : "") + line.content;
+    dom.lyricsBox.appendChild(div);
+  }
+  lastActiveLyricIndex = -1;
 }
 
-function applyShortcutInputs() {
-  appState.shortcuts = {
-    playPause: normalizeShortcutValue(keyPlayPause.value, DEFAULT_SHORTCUTS.playPause),
-    restart: normalizeShortcutValue(keyRestart.value, DEFAULT_SHORTCUTS.restart),
-    mute: normalizeShortcutValue(keyMute.value, DEFAULT_SHORTCUTS.mute),
-    lyricsFocus: normalizeShortcutValue(keyLyricsFocus.value, DEFAULT_SHORTCUTS.lyricsFocus),
-    practiceMode: normalizeShortcutValue(keyPracticeMode.value, DEFAULT_SHORTCUTS.practiceMode),
-    metronomeToggle: normalizeShortcutValue(keyMetronomeToggle.value, DEFAULT_SHORTCUTS.metronomeToggle)
+function setActiveLyricByTime(timeSec) {
+  if (!app.lyrics.length || app.lyrics[0]?.t == null) return;
+  let answer = -1;
+  let lo = 0;
+  let hi = app.lyrics.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (app.lyrics[mid].t <= timeSec) {
+      answer = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  if (answer < 0) answer = 0;
+  if (answer === lastActiveLyricIndex) return;
+  dom.lyricsBox.querySelector(".line.active")?.classList.remove("active");
+  const current = dom.lyricsBox.querySelector(`.line[data-idx="${answer}"]`);
+  if (current) {
+    current.classList.add("active");
+    if (!document.body.classList.contains("practice-mode")) {
+      current.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }
+  lastActiveLyricIndex = answer;
+}
+
+function usePastedLyrics() {
+  app.lyrics = dom.lyricsPaste.value.trim() ? parseLRC(dom.lyricsPaste.value.trim()) : [];
+  renderLyrics();
+  if (canSync()) setActiveLyricByTime(getMasterTime());
+  scheduleAutosave();
+}
+
+function collectSongPayload() {
+  return {
+    title: dom.songTitle.value.trim(),
+    artist: dom.songArtist.value.trim(),
+    summary: dom.songSummary.value.trim(),
+    description: "",
+    officialClipUrl: dom.songUrl.value.trim(),
+    tutorialUrl: dom.pianoUrl.value.trim(),
+    songStartSec: ensureNumber(dom.songOffset.value, 0),
+    tutorialStartSec: ensureNumber(dom.pianoOffset.value, 0),
+    countdownSec: Math.max(0, Math.floor(ensureNumber(dom.countdownSec.value, 4))),
+    metronomeBpm: Math.round(ensureNumber(dom.metronomeBpm.value, 92)),
+    metronomeBeatsPerBar: Math.round(ensureNumber(dom.metronomeBeatsPerBar.value, 4)),
+    loopRepeatTarget: Math.max(0, Math.floor(ensureNumber(dom.loopRepeats.value, 4))),
+    lyrics: dom.lyricsPaste.value.trim(),
+    markers: app.markers.map((marker) => ({
+      id: marker.id,
+      label: marker.label,
+      masterTimeSec: round2(marker.masterTimeSec)
+    })),
+    sections: app.sections.map((section) => ({
+      id: section.id,
+      name: section.name,
+      color: section.color,
+      startSec: round2(section.startSec),
+      endSec: section.endSec == null ? null : round2(section.endSec),
+      repeatCount: section.repeatCount,
+      shortcut: section.shortcut
+    })),
+    published: dom.publishSongToggle.value === "true"
   };
-
-  loadShortcutInputsFromState();
-  safeLocalStorageSet(SHORTCUT_STORAGE_KEY, JSON.stringify(appState.shortcuts));
-  setShortcutStatus("Shortcuts saved.");
-  renderShortcutsList();
-  scheduleAutosave();
 }
 
-function resetShortcuts() {
-  appState.shortcuts = { ...DEFAULT_SHORTCUTS };
-  loadShortcutInputsFromState();
-  safeLocalStorageSet(SHORTCUT_STORAGE_KEY, JSON.stringify(appState.shortcuts));
-  setShortcutStatus("Shortcuts reset to defaults.");
-  renderShortcutsList();
-  scheduleAutosave();
-}
-
-function loadShortcutMap() {
-  const raw = safeLocalStorageGet(SHORTCUT_STORAGE_KEY, null);
-  if (!raw) {
-    appState.shortcuts = { ...DEFAULT_SHORTCUTS };
-    loadShortcutInputsFromState();
+async function saveCurrentSong() {
+  if (!app.session?.user) {
+    showToast("Log in to publish or update songs.", "danger");
+    openAuthModal("login");
     return;
   }
 
+  const payload = collectSongPayload();
+  const wasEditing = Boolean(app.currentSongId && app.currentSongCanEdit);
   try {
-    const parsed = JSON.parse(raw);
-    appState.shortcuts = {
-      playPause: normalizeShortcutValue(parsed.playPause, DEFAULT_SHORTCUTS.playPause),
-      restart: normalizeShortcutValue(parsed.restart, DEFAULT_SHORTCUTS.restart),
-      mute: normalizeShortcutValue(parsed.mute, DEFAULT_SHORTCUTS.mute),
-      lyricsFocus: normalizeShortcutValue(parsed.lyricsFocus, DEFAULT_SHORTCUTS.lyricsFocus),
-      practiceMode: normalizeShortcutValue(parsed.practiceMode, DEFAULT_SHORTCUTS.practiceMode),
-      metronomeToggle: normalizeShortcutValue(parsed.metronomeToggle, DEFAULT_SHORTCUTS.metronomeToggle)
-    };
+    const song = app.currentSongId && app.currentSongCanEdit
+      ? await apiFetch(`/api/me/songs/${app.currentSongId}`, { method: "PUT", body: JSON.stringify(payload) })
+      : await apiFetch("/api/me/songs", { method: "POST", body: JSON.stringify(payload) });
+    applySongToForm(song);
+    await Promise.all([loadLobbySongs(), loadMySongs()]);
+    renderProfile();
+    renderMySongs();
+    showToast(wasEditing ? "Song changes saved." : "Song published to the lobby.");
+  } catch (error) {
+    showToast(error.message, "danger");
+  }
+}
+
+async function loadLobbySongs() {
+  try {
+    app.songs = await apiFetch("/api/songs", { method: "GET" });
+    renderLobby();
+  } catch (error) {
+    setBootstrapStatus(error.message);
+    showToast(error.message, "danger");
+  }
+}
+
+async function loadMySongs() {
+  if (!app.session?.user) {
+    app.mySongs = [];
+    renderMySongs();
+    return;
+  }
+  try {
+    app.mySongs = await apiFetch("/api/me/songs", { method: "GET" });
+    renderMySongs();
+  } catch (error) {
+    app.mySongs = [];
+    renderMySongs();
+    showToast(error.message, "danger");
+  }
+}
+
+async function loadSong(songId, options = {}) {
+  try {
+    const song = await apiFetch(`/api/songs/${songId}`, { method: "GET" });
+    applySongToForm(song);
+    document.querySelector("#workspaceSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!options.silent) showToast(`Loaded ${song.artist} — ${song.title}.`);
+  } catch (error) {
+    if (!options.silent) showToast(error.message, "danger");
+  }
+}
+
+function createNewDraft() {
+  app.currentSongId = "";
+  app.currentSongCanEdit = false;
+  app.currentSongOwner = "";
+  dom.songTitle.value = "";
+  dom.songArtist.value = "";
+  dom.songSummary.value = "";
+  dom.songUrl.value = "";
+  dom.pianoUrl.value = "";
+  dom.songOffset.value = "0";
+  dom.pianoOffset.value = "0";
+  dom.countdownSec.value = "4";
+  dom.publishSongToggle.value = "true";
+  dom.metronomeBpm.value = "92";
+  dom.metronomeBeatsPerBar.value = "4";
+  dom.loopRepeats.value = "4";
+  dom.lyricsPaste.value = "";
+  dom.exportOutput.value = "";
+  app.lyrics = [];
+  app.markers = [];
+  app.sections = [];
+  dom.markerName.value = "";
+  dom.markerName.dataset.editId = "";
+  dom.markerTime.value = "0";
+  dom.sectionName.value = "";
+  dom.sectionName.dataset.editId = "";
+  dom.sectionColor.value = "#4f8cff";
+  dom.sectionStart.value = "0";
+  dom.sectionEnd.value = "";
+  dom.sectionRepeat.value = "4";
+  dom.sectionShortcut.value = "";
+  metronome.setBpm(92);
+  metronome.setBeatsPerBar(4);
+  readOffsets();
+  renderLyrics();
+  renderMarkersList();
+  renderSectionsList();
+  renderEditorHeader();
+}
+
+function collectDraftState() {
+  return {
+    song: collectSongPayload(),
+    markers: app.markers,
+    sections: app.sections,
+    settings: app.settings,
+    currentSongId: app.currentSongId
+  };
+}
+
+function scheduleAutosave() {
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    safeSet(STORAGE_KEYS.draft, JSON.stringify(collectDraftState()));
+  }, 250);
+}
+
+function restoreDraft() {
+  const raw = safeGet(STORAGE_KEYS.draft, null);
+  if (!raw) return;
+  try {
+    const draft = JSON.parse(raw);
+    if (draft.settings) applySettings(draft.settings, true);
+    if (draft.song) {
+      dom.songTitle.value = draft.song.title || "";
+      dom.songArtist.value = draft.song.artist || "";
+      dom.songSummary.value = draft.song.summary || "";
+      dom.songUrl.value = draft.song.officialClipUrl || "";
+      dom.pianoUrl.value = draft.song.tutorialUrl || "";
+      dom.songOffset.value = String(draft.song.songStartSec ?? 0);
+      dom.pianoOffset.value = String(draft.song.tutorialStartSec ?? 0);
+      dom.countdownSec.value = String(draft.song.countdownSec ?? 4);
+      dom.publishSongToggle.value = String(draft.song.published !== false);
+      dom.metronomeBpm.value = String(draft.song.metronomeBpm ?? 92);
+      dom.metronomeBeatsPerBar.value = String(draft.song.metronomeBeatsPerBar ?? 4);
+      dom.loopRepeats.value = String(draft.song.loopRepeatTarget ?? 4);
+      dom.lyricsPaste.value = draft.song.lyrics || "";
+      app.lyrics = dom.lyricsPaste.value.trim() ? parseLRC(dom.lyricsPaste.value.trim()) : [];
+      app.markers = Array.isArray(draft.markers) ? draft.markers.map(normalizeMarker).filter(Boolean) : [];
+      app.sections = Array.isArray(draft.sections) ? draft.sections.map(normalizeSection).filter(Boolean) : [];
+      renderLyrics();
+      renderMarkersList();
+      renderSectionsList();
+      renderPracticeHelper();
+      renderShortcutsModal();
+    }
   } catch {
-    appState.shortcuts = { ...DEFAULT_SHORTCUTS };
-  }
-
-  loadShortcutInputsFromState();
-}
-
-function renderShortcutsList() {
-  const rows = [
-    { key: appState.shortcuts.playPause, action: "Play or pause" },
-    { key: appState.shortcuts.restart, action: "Back to start" },
-    { key: appState.shortcuts.mute, action: "Mute/unmute tutorial" },
-    { key: "Left / Right", action: "Seek -5 / +5 seconds" },
-    { key: appState.shortcuts.lyricsFocus, action: "Toggle lyrics focus" },
-    { key: appState.shortcuts.practiceMode, action: "Toggle fullscreen practice" },
-    { key: appState.shortcuts.metronomeToggle, action: "Toggle metronome" },
-    { key: "?", action: "Open or close this shortcuts panel" }
-  ];
-
-  const markerText = appState.markers.length
-    ? appState.markers.map((m) => `${m.key} -> ${m.name}`).join(" | ")
-    : "No labels yet";
-  rows.push({ key: "1-9", action: `Jump to timeline labels (${markerText})` });
-
-  const sectionText = appState.sections.length
-    ? appState.sections.filter((s) => s.shortcut).map((s) => `${s.shortcut} -> ${s.name}`).join(" | ")
-    : "No section shortcuts";
-  rows.push({ key: "Section keys", action: sectionText });
-
-  shortcutsList.innerHTML = "";
-  for (const row of rows) {
-    const div = document.createElement("div");
-    div.className = "shortcutRow";
-    const left = document.createElement("strong");
-    left.textContent = row.key;
-    const right = document.createElement("span");
-    right.textContent = row.action;
-    div.append(left, right);
-    shortcutsList.appendChild(div);
+    // Ignore bad drafts.
   }
 }
 
-function openShortcuts() {
-  renderShortcutsList();
-  shortcutsModal.classList.remove("hidden");
+function openModal(node) {
+  node.classList.remove("hidden");
 }
 
-function closeShortcuts() {
-  shortcutsModal.classList.add("hidden");
+function closeModal(node) {
+  node.classList.add("hidden");
 }
 
-// --- Playback/sync core ---
-function clampMasterTime(t) {
-  const safe = Math.max(0, ensureNumber(t, 0));
-  if (duration > 0) return Math.min(duration, safe);
-  return safe;
+function openAuthModal(mode) {
+  app.authMode = mode;
+  const login = mode !== "signup";
+  dom.authTabLogin.classList.toggle("active", login);
+  dom.authTabSignup.classList.toggle("active", !login);
+  dom.authSubmitBtn.textContent = login ? "Log in" : "Create account";
+  dom.authPassword.autocomplete = login ? "current-password" : "new-password";
+  dom.authStatus.textContent = "";
+  openModal(dom.authModal);
+}
+
+function openProfileModal() {
+  renderProfile();
+  renderMySongs();
+  openModal(dom.profileModal);
+}
+
+async function handleAuthSubmit(event) {
+  event.preventDefault();
+  if (!app.supabase) return;
+  const email = dom.authEmail.value.trim();
+  const password = dom.authPassword.value;
+  if (!email || !password) return;
+  dom.authStatus.textContent = app.authMode === "signup" ? "Creating account…" : "Logging in…";
+
+  try {
+    if (app.authMode === "signup") {
+      const result = await app.supabase.auth.signUp({ email, password });
+      if (result.error) throw result.error;
+      dom.authStatus.textContent = "Sign-up request sent. If email confirmation is enabled, check your inbox.";
+      showToast("Account created. You can log in as soon as Supabase approves the session.");
+      return;
+    }
+
+    const result = await app.supabase.auth.signInWithPassword({ email, password });
+    if (result.error) throw result.error;
+    closeModal(dom.authModal);
+    showToast("Logged in.");
+  } catch (error) {
+    dom.authStatus.textContent = error.message || "Authentication failed.";
+  }
+}
+
+async function handleSessionChanged(session) {
+  app.session = session || null;
+  setAuthIndicator();
+  if (app.session?.user) {
+    try {
+      app.profile = await apiFetch("/api/me/profile", { method: "GET" });
+      applySettings(app.profile.settings, true);
+      renderProfile();
+    } catch (error) {
+      showToast(error.message, "danger");
+    }
+  } else {
+    app.profile = null;
+    const storedSettings = safeGet(STORAGE_KEYS.settings, null);
+    if (storedSettings) {
+      applySettings(JSON.parse(storedSettings), false);
+    } else {
+      applySettings(getDefaultSettings(), false);
+    }
+  }
+  await Promise.all([loadLobbySongs(), loadMySongs()]);
+  if (app.currentSongId) {
+    loadSong(app.currentSongId, { silent: true }).catch(() => {});
+  }
+  renderPracticeHelper();
+  renderShortcutsModal();
+  renderEditorHeader(app.currentSongId ? {
+    id: app.currentSongId,
+    title: dom.songTitle.value,
+    artist: dom.songArtist.value,
+    canEdit: app.currentSongCanEdit
+  } : null);
+}
+
+async function saveProfileSettings() {
+  const settings = readSettingsFromInputs();
+  applySettings(settings, true);
+  if (!app.session?.user) {
+    setShortcutStatus("Saved locally. Log in to sync these defaults to your profile.");
+    renderPracticeHelper();
+    renderShortcutsModal();
+    scheduleAutosave();
+    return;
+  }
+  try {
+    app.profile = await apiFetch("/api/me/profile", {
+      method: "PUT",
+      body: JSON.stringify({
+        displayName: app.profile?.displayName || app.session.user.email || "",
+        settings
+      })
+    });
+    setShortcutStatus("Profile defaults saved.");
+    renderProfile();
+    renderPracticeHelper();
+    renderShortcutsModal();
+  } catch (error) {
+    setShortcutStatus(error.message);
+  }
+}
+
+function resetSettings() {
+  applySettings(getDefaultSettings(), true);
+  setShortcutStatus("Defaults restored.");
+  renderPracticeHelper();
+  renderShortcutsModal();
+}
+
+function exportCurrentSong() {
+  dom.exportOutput.value = JSON.stringify(collectSongPayload(), null, 2);
+}
+
+function readOffsets() {
+  songStartSec = Math.max(0, ensureNumber(dom.songOffset.value, 0));
+  pianoStartSec = Math.max(0, ensureNumber(dom.pianoOffset.value, 0));
 }
 
 function getMasterTime() {
-  if (!songPlayer || !songPlayer.getCurrentTime) return 0;
-  return Math.max(0, (songPlayer.getCurrentTime() || 0) - songStartSec);
+  if (!songPlayer?.getCurrentTime) return 0;
+  return Math.max(0, ensureNumber(songPlayer.getCurrentTime(), 0) - songStartSec);
+}
+
+function clampMasterTime(value) {
+  const safe = Math.max(0, ensureNumber(value, 0));
+  return duration > 0 ? Math.min(duration, safe) : safe;
 }
 
 function canSync() {
-  return Boolean(readySong && readyPiano && songPlayer && pianoPlayer);
+  return Boolean(songPlayer && pianoPlayer && readySong && readyPiano);
 }
 
 function setTransportTime(masterTime) {
-  const t = clampMasterTime(masterTime);
-  scrubber.value = String(t);
-  timeLabel.textContent = `${fmtTime(t)} / ${fmtTime(duration)}`;
+  const safe = clampMasterTime(masterTime);
+  dom.scrubber.value = String(safe);
+  dom.timeLabel.textContent = `${fmtTime(safe)} / ${fmtTime(duration)}`;
 }
 
 function safeSeekBoth(masterTime, seekAhead = true) {
   if (!canSync()) return;
-  const t = clampMasterTime(masterTime);
-  const songTime = t + songStartSec;
-  const pianoTime = t + pianoStartSec;
-
-  songPlayer.seekTo(songTime, seekAhead);
-  pianoPlayer.seekTo(pianoTime, seekAhead);
-  setTransportTime(t);
-  setActiveLyricByTime(t);
+  const safe = clampMasterTime(masterTime);
+  songPlayer.seekTo(songStartSec + safe, seekAhead);
+  pianoPlayer.seekTo(pianoStartSec + safe, seekAhead);
+  setTransportTime(safe);
+  setActiveLyricByTime(safe);
 }
 
-function disableTransport() {
-  playBtn.disabled = true;
-  restartBtn.disabled = true;
-  mutePianoBtn.disabled = true;
-  scrubber.disabled = true;
-  toggleLoopBtn.disabled = true;
-  setLoopABtn.disabled = true;
-  setLoopBBtn.disabled = true;
-  clearLoopBtn.disabled = true;
-  resyncBtn.disabled = true;
+function enableTransport(enabled) {
+  dom.playBtn.disabled = !enabled;
+  dom.restartBtn.disabled = !enabled;
+  dom.mutePianoBtn.disabled = !enabled;
+  dom.scrubber.disabled = !enabled;
+  dom.toggleLoopBtn.disabled = !enabled;
+  dom.setLoopABtn.disabled = !enabled;
+  dom.setLoopBBtn.disabled = !enabled;
+  dom.clearLoopBtn.disabled = !enabled;
+  dom.resyncBtn.disabled = !enabled;
 }
 
-function enableTransport() {
-  playBtn.disabled = false;
-  restartBtn.disabled = false;
-  mutePianoBtn.disabled = false;
-  scrubber.disabled = false;
-  toggleLoopBtn.disabled = false;
-  setLoopABtn.disabled = false;
-  setLoopBBtn.disabled = false;
-  clearLoopBtn.disabled = false;
-  resyncBtn.disabled = false;
+function updateMuteIcon() {
+  if (!pianoPlayer?.isMuted) {
+    dom.muteIconPath.setAttribute("d", MUTE_ICON_PATH);
+    return;
+  }
+  dom.muteIconPath.setAttribute("d", pianoPlayer.isMuted() ? UNMUTE_ICON_PATH : MUTE_ICON_PATH);
+}
+
+function setSyncing(value) {
+  isSyncing = value;
+  dom.playIconPath.setAttribute("d", value ? PAUSE_ICON_PATH : PLAY_ICON_PATH);
+  metronome.syncWithPlayback(value);
+  if (value) startSyncLoop();
+  else stopSyncLoop();
 }
 
 function stopSyncLoop() {
@@ -1159,63 +1422,38 @@ function stopSyncLoop() {
 }
 
 function maybeHandleLoop(master) {
-  if (!appState.loop.enabled) return;
-  if (appState.loop.aSec == null || appState.loop.bSec == null) return;
-  if (master < appState.loop.bSec - 0.02) return;
-
-  if (appState.loop.repeatTarget > 0 && appState.loop.completed >= appState.loop.repeatTarget) {
-    appState.loop.enabled = false;
+  if (!app.loop.enabled || app.loop.aSec == null || app.loop.bSec == null) return;
+  if (master < app.loop.bSec - 0.02) return;
+  if (app.loop.repeatTarget > 0 && app.loop.completed >= app.loop.repeatTarget) {
+    app.loop.enabled = false;
     renderLoopStatus();
     return;
   }
-
-  appState.loop.completed += 1;
-  appState.diagnostics.loopCycles += 1;
+  app.loop.completed += 1;
+  app.diagnostics.loopCycles += 1;
   renderDiagnostics();
   renderLoopStatus();
-  safeSeekBoth(appState.loop.aSec, true);
-}
-
-function maybeHandlePlayWindow(master) {
-  if (appState.playWindowEnd == null) return;
-  if (master < appState.playWindowEnd - 0.02) return;
-
-  if (appState.loop.enabled) return;
-  songPlayer.pauseVideo();
-  pianoPlayer.pauseVideo();
-  setSyncing(false);
-  appState.playWindowEnd = null;
+  safeSeekBoth(app.loop.aSec, true);
 }
 
 function startSyncLoop() {
   stopSyncLoop();
   syncTimer = setInterval(() => {
     if (!canSync() || !isSyncing || userScrubbing) return;
-
     const master = clampMasterTime(getMasterTime());
     const targetPiano = master + pianoStartSec;
     const currentPiano = ensureNumber(pianoPlayer.getCurrentTime?.(), targetPiano);
     const drift = currentPiano - targetPiano;
-
-    appState.diagnostics.driftMs = drift * 1000;
-
+    app.diagnostics.driftMs = drift * 1000;
     if (Math.abs(drift) > 0.45 && Date.now() - lastPianoCorrectionAt > 500) {
       pianoPlayer.seekTo(Math.max(0, targetPiano), true);
       lastPianoCorrectionAt = Date.now();
-      appState.diagnostics.corrections += 1;
+      app.diagnostics.corrections += 1;
     }
-
     setTransportTime(master);
     setActiveLyricByTime(master);
     maybeHandleLoop(master);
-    maybeHandlePlayWindow(master);
     renderDiagnostics();
-
-    if (duration > 0 && master >= duration) {
-      songPlayer.pauseVideo();
-      pianoPlayer.pauseVideo();
-      setSyncing(false);
-    }
   }, 100);
 }
 
@@ -1224,14 +1462,31 @@ function cancelCountdown() {
     clearInterval(countdownTimer);
     countdownTimer = null;
   }
-  countdownOverlay.classList.add("hidden");
+  dom.countdownOverlay.classList.add("hidden");
+}
+
+function renderDiagnostics() {
+  dom.diagDrift.textContent = `${Math.round(app.diagnostics.driftMs)} ms`;
+  dom.diagCorrections.textContent = String(app.diagnostics.corrections);
+  dom.diagBuffering.textContent = String(app.diagnostics.bufferingEvents);
+  dom.diagLoops.textContent = String(app.diagnostics.loopCycles);
+}
+
+function renderLoopStatus() {
+  const a = app.loop.aSec == null ? "--:--" : fmtTime(app.loop.aSec);
+  const b = app.loop.bSec == null ? "--:--" : fmtTime(app.loop.bSec);
+  const repeats = app.loop.repeatTarget === 0 ? "inf" : app.loop.repeatTarget;
+  dom.loopStatus.textContent = `Loop ${app.loop.enabled ? "On" : "Off"} | A ${a} | B ${b} | ${app.loop.completed}/${repeats}`;
 }
 
 function startPlaybackNow() {
   if (!canSync()) return;
+  if (app.settings.autoEnterPracticeOnPlay && !document.body.classList.contains("practice-mode")) {
+    togglePracticeMode(true);
+  }
   lastPlayRequestAt = Date.now();
-  const t = userScrubbing ? ensureNumber(scrubber.value, 0) : getMasterTime();
-  safeSeekBoth(t);
+  const master = userScrubbing ? ensureNumber(dom.scrubber.value, 0) : getMasterTime();
+  safeSeekBoth(master);
   songPlayer.playVideo();
   pianoPlayer.playVideo();
   setSyncing(true);
@@ -1239,18 +1494,15 @@ function startPlaybackNow() {
 
 function startPlaybackWithCountdown() {
   if (!canSync()) return;
-
-  const count = Math.max(0, Math.floor(ensureNumber(el("countdownSec").value, 0)));
+  const count = Math.max(0, Math.floor(ensureNumber(dom.countdownSec.value, 0)));
   if (count <= 0) {
     startPlaybackNow();
     return;
   }
-
   cancelCountdown();
   let left = count;
-  countdownValue.textContent = String(left);
-  countdownOverlay.classList.remove("hidden");
-
+  dom.countdownValue.textContent = String(left);
+  dom.countdownOverlay.classList.remove("hidden");
   countdownTimer = setInterval(() => {
     left -= 1;
     if (left <= 0) {
@@ -1258,14 +1510,13 @@ function startPlaybackWithCountdown() {
       startPlaybackNow();
       return;
     }
-    countdownValue.textContent = String(left);
+    dom.countdownValue.textContent = String(left);
   }, 1000);
 }
 
 function togglePlayPause() {
   if (!canSync()) return;
   const playing = songPlayer.getPlayerState?.() === 1 || pianoPlayer.getPlayerState?.() === 1;
-
   if (playing || isSyncing) {
     cancelCountdown();
     songPlayer.pauseVideo();
@@ -1273,7 +1524,6 @@ function togglePlayPause() {
     setSyncing(false);
     return;
   }
-
   startPlaybackWithCountdown();
 }
 
@@ -1283,21 +1533,179 @@ function restart() {
   songPlayer.pauseVideo();
   pianoPlayer.pauseVideo();
   setSyncing(false);
-  userScrubbing = false;
-  appState.playWindowEnd = null;
   safeSeekBoth(0);
 }
 
 function toggleMutePiano() {
-  if (!pianoPlayer || !pianoPlayer.isMuted) return;
+  if (!pianoPlayer?.isMuted) return;
   if (pianoPlayer.isMuted()) pianoPlayer.unMute();
   else pianoPlayer.mute();
   updateMuteIcon();
 }
 
-function readOffsets() {
-  songStartSec = Math.max(0, ensureNumber(el("songOffset").value, 0));
-  pianoStartSec = Math.max(0, ensureNumber(el("pianoOffset").value, 0));
+function setLoopPoint(which) {
+  if (!canSync()) return;
+  const master = clampMasterTime(getMasterTime());
+  if (which === "a") app.loop.aSec = master;
+  else app.loop.bSec = master;
+  if (app.loop.aSec != null && app.loop.bSec != null && app.loop.bSec <= app.loop.aSec) {
+    app.loop.bSec = app.loop.aSec + 0.2;
+  }
+  app.loop.completed = 0;
+  renderLoopStatus();
+  scheduleAutosave();
+}
+
+function clearLoop() {
+  app.loop.enabled = false;
+  app.loop.aSec = null;
+  app.loop.bSec = null;
+  app.loop.completed = 0;
+  renderLoopStatus();
+}
+
+function toggleLoopEnabled() {
+  if (app.loop.aSec == null || app.loop.bSec == null) {
+    showToast("Set both loop points first.", "danger");
+    return;
+  }
+  app.loop.repeatTarget = Math.max(0, Math.floor(ensureNumber(dom.loopRepeats.value, app.loop.repeatTarget)));
+  app.loop.enabled = !app.loop.enabled;
+  app.loop.completed = 0;
+  renderLoopStatus();
+}
+
+function setMetronomeButtonLabel() {
+  dom.toggleMetronomeBtn.textContent = metronome.enabled ? "Metronome On" : "Metronome Off";
+}
+
+function toggleMetronome() {
+  metronome.setBpm(ensureNumber(dom.metronomeBpm.value, 92));
+  metronome.setBeatsPerBar(ensureNumber(dom.metronomeBeatsPerBar.value, 4));
+  metronome.setEnabled(!metronome.enabled);
+  metronome.syncWithPlayback(isSyncing);
+  setMetronomeButtonLabel();
+}
+
+function playSection(section, enableLoop) {
+  if (!canSync()) return;
+  app.loop.enabled = enableLoop && section.endSec != null;
+  app.loop.aSec = section.startSec;
+  app.loop.bSec = section.endSec;
+  app.loop.completed = 0;
+  app.loop.repeatTarget = section.repeatCount;
+  renderLoopStatus();
+  safeSeekBoth(section.startSec, true);
+  startPlaybackWithCountdown();
+}
+
+function jumpToMarker(markerId) {
+  const marker = app.markers.find((item) => item.id === markerId);
+  if (!marker || !canSync()) return;
+  cancelCountdown();
+  songPlayer.pauseVideo();
+  pianoPlayer.pauseVideo();
+  setSyncing(false);
+  safeSeekBoth(marker.masterTimeSec, true);
+}
+
+function addOrUpdateMarkerFromForm() {
+  const marker = normalizeMarker({
+    id: dom.markerName.dataset.editId || undefined,
+    label: dom.markerName.value.trim(),
+    masterTimeSec: dom.markerTime.value
+  }, app.markers.length);
+  if (!marker) return;
+  const existingIdx = app.markers.findIndex((item) => item.id === marker.id);
+  if (existingIdx >= 0) app.markers[existingIdx] = marker;
+  else app.markers.push(marker);
+  sortMarkers();
+  dom.markerName.value = "";
+  dom.markerName.dataset.editId = "";
+  dom.markerTime.value = "0";
+  renderMarkersList();
+  scheduleAutosave();
+}
+
+function captureMarkerAtCurrentTime() {
+  const current = canSync() ? getMasterTime() : ensureNumber(dom.scrubber.value, 0);
+  const threshold = app.settings.markerRetargetThresholdSec;
+  let closest = null;
+  let distance = Infinity;
+  for (const marker of app.markers) {
+    const diff = Math.abs(marker.masterTimeSec - current);
+    if (diff <= threshold && diff < distance) {
+      closest = marker;
+      distance = diff;
+    }
+  }
+
+  if (closest) {
+    closest.masterTimeSec = round2(current);
+    sortMarkers();
+    showToast(`Moved "${closest.label}" to ${fmtTime(current)}.`);
+  } else {
+    const next = normalizeMarker({
+      id: genId("marker"),
+      label: `Label ${app.markers.length + 1}`,
+      masterTimeSec: current
+    }, app.markers.length);
+    app.markers.push(next);
+    sortMarkers();
+    showToast(`Captured ${next.label} at ${fmtTime(current)}.`);
+  }
+
+  renderMarkersList();
+  scheduleAutosave();
+}
+
+function addOrUpdateSectionFromForm() {
+  const section = normalizeSection({
+    id: dom.sectionName.dataset.editId || undefined,
+    name: dom.sectionName.value,
+    color: dom.sectionColor.value,
+    startSec: dom.sectionStart.value,
+    endSec: dom.sectionEnd.value,
+    repeatCount: dom.sectionRepeat.value,
+    shortcut: dom.sectionShortcut.value
+  }, app.sections.length);
+  const existingIdx = app.sections.findIndex((item) => item.id === section.id);
+  if (existingIdx >= 0) app.sections[existingIdx] = section;
+  else app.sections.push(section);
+  sortSections();
+  dom.sectionName.value = "";
+  dom.sectionName.dataset.editId = "";
+  dom.sectionEnd.value = "";
+  renderSectionsList();
+  scheduleAutosave();
+}
+
+function setSectionStartFromCurrent() {
+  dom.sectionStart.value = String(round2(canSync() ? getMasterTime() : ensureNumber(dom.scrubber.value, 0)));
+}
+
+function setSectionEndFromCurrent() {
+  dom.sectionEnd.value = String(round2(canSync() ? getMasterTime() : ensureNumber(dom.scrubber.value, 0)));
+}
+
+function togglePracticeMode(force) {
+  const next = typeof force === "boolean"
+    ? force
+    : !document.body.classList.contains("practice-mode");
+  document.body.classList.toggle("practice-mode", next);
+  dom.practiceModeBtn.textContent = next ? "Exit practice" : "Fullscreen practice";
+  if (next && document.documentElement.requestFullscreen && !document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else if (!next && document.exitFullscreen && document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+function onFullscreenChange() {
+  if (!document.fullscreenElement && document.body.classList.contains("practice-mode")) {
+    document.body.classList.remove("practice-mode");
+    dom.practiceModeBtn.textContent = "Fullscreen practice";
+  }
 }
 
 function calibrateUsingCurrentFrame() {
@@ -1305,336 +1713,44 @@ function calibrateUsingCurrentFrame() {
     setCalibrateStatus("Load both videos first.");
     return;
   }
-
   const songCurrent = ensureNumber(songPlayer.getCurrentTime?.(), 0);
   const pianoCurrent = ensureNumber(pianoPlayer.getCurrentTime?.(), 0);
-  const currentSongOffset = Math.max(0, ensureNumber(el("songOffset").value, 0));
   const delta = pianoCurrent - songCurrent;
-  const newPianoOffset = Math.max(0, currentSongOffset + delta);
-
-  el("pianoOffset").value = String(round2(newPianoOffset));
+  const newPianoOffset = Math.max(0, songStartSec + delta);
+  dom.pianoOffset.value = String(round2(newPianoOffset));
   readOffsets();
-
-  const master = Math.max(0, songCurrent - songStartSec);
-  safeSeekBoth(master, true);
-
-  const deltaText = `${delta >= 0 ? "+" : ""}${round2(delta)}s`;
-  setCalibrateStatus(`Calibration saved. Tutorial offset adjusted by ${deltaText}.`);
-  scheduleAutosave();
+  safeSeekBoth(Math.max(0, songCurrent - songStartSec), true);
+  setCalibrateStatus(`Tutorial offset adjusted by ${delta >= 0 ? "+" : ""}${round2(delta)}s.`);
 }
 
-// --- Loop controls ---
-function renderLoopStatus() {
-  const a = appState.loop.aSec;
-  const b = appState.loop.bSec;
-  const aTxt = a == null ? "--:--" : fmtTime(a);
-  const bTxt = b == null ? "--:--" : fmtTime(b);
-  const repeats = appState.loop.repeatTarget === 0 ? "inf" : String(appState.loop.repeatTarget);
-  const enabledText = appState.loop.enabled ? "On" : "Off";
-  loopStatus.textContent = `Loop ${enabledText} | A ${aTxt} | B ${bTxt} | ${appState.loop.completed}/${repeats}`;
+function resetPlayerState(which) {
+  if (app.playerUiState[which]) app.playerUiState[which].hasStartedPlayback = false;
 }
 
-function setLoopPoint(which) {
-  if (!canSync()) return;
-  const master = clampMasterTime(getMasterTime());
-  if (which === "a") appState.loop.aSec = master;
-  else appState.loop.bSec = master;
-
-  if (appState.loop.aSec != null && appState.loop.bSec != null && appState.loop.bSec <= appState.loop.aSec) {
-    appState.loop.bSec = appState.loop.aSec + 0.2;
-  }
-
-  appState.loop.completed = 0;
-  renderLoopStatus();
-  scheduleAutosave();
-}
-
-function clearLoop() {
-  appState.loop.enabled = false;
-  appState.loop.aSec = null;
-  appState.loop.bSec = null;
-  appState.loop.completed = 0;
-  renderLoopStatus();
-  scheduleAutosave();
-}
-
-function toggleLoopEnabled() {
-  if (appState.loop.aSec == null || appState.loop.bSec == null) {
-    alert("Set both loop points A and B first.");
-    return;
-  }
-
-  appState.loop.repeatTarget = Math.max(0, Math.floor(ensureNumber(loopRepeatsInput.value, appState.loop.repeatTarget)));
-  appState.loop.enabled = !appState.loop.enabled;
-  if (appState.loop.enabled) appState.loop.completed = 0;
-  renderLoopStatus();
-  scheduleAutosave();
-}
-
-function resyncNow() {
-  if (!canSync()) return;
-  const t = clampMasterTime(getMasterTime());
-  safeSeekBoth(t, true);
-}
-
-// --- Presets ---
-function renderPresetSelect() {
-  presetSelect.innerHTML = "";
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = appState.songs.length ? "Select preset..." : "No presets loaded";
-  presetSelect.appendChild(placeholder);
-  if (!appState.songs.length) return;
-
-  appState.songs.forEach((song, idx) => {
-    const opt = document.createElement("option");
-    opt.value = String(idx);
-    opt.textContent = song.name || `Preset ${idx + 1}`;
-    presetSelect.appendChild(opt);
-  });
-}
-
-function applyPreset(song) {
-  if (!song) return;
-
-  el("presetName").value = song.name || "";
-  el("songUrl").value = song.songUrl || "";
-  el("pianoUrl").value = song.pianoUrl || song.tutorialUrl || "";
-  el("songOffset").value = String(ensureNumber(song.songStartSec, 0));
-  el("pianoOffset").value = String(ensureNumber(song.pianoStartSec, 0));
-  el("countdownSec").value = String(Math.max(0, Math.floor(ensureNumber(song.countdownSec, 4))));
-
-  const bpm = clamp(Math.round(ensureNumber(song.metronomeBpm, 92)), 30, 300);
-  const beatsPerBar = clamp(
-    Math.round(ensureNumber(song.metronomeBeatsPerBar ?? song.metronomeBeats ?? 4, 4)),
-    1,
-    12
-  );
-  metronomeBpm.value = String(bpm);
-  metronomeBeatsPerBar.value = String(beatsPerBar);
-  metronome.setBpm(bpm);
-  metronome.setBeatsPerBar(beatsPerBar);
-
-  const rawLyrics = String(song.lyrics || "");
-  el("lyricsPaste").value = rawLyrics;
-  lyrics = rawLyrics ? parseLRC(rawLyrics) : [];
-  renderLyrics();
-
-  appState.markers = Array.isArray(song.markers)
-    ? song.markers.map(normalizeMarker).filter(Boolean)
-    : [];
-  sortMarkers();
-  renderMarkersList();
-
-  appState.sections = Array.isArray(song.sections)
-    ? song.sections.map(normalizeSection).filter(Boolean)
-    : [];
-  renderSectionsList();
-
-  appState.loop.enabled = false;
-  appState.loop.aSec = null;
-  appState.loop.bSec = null;
-  appState.loop.repeatTarget = Math.max(0, Math.floor(ensureNumber(song.loopRepeatTarget, 4)));
-  appState.loop.completed = 0;
-  loopRepeatsInput.value = String(appState.loop.repeatTarget);
-  renderLoopStatus();
-
-  renderShortcutsList();
-  scheduleAutosave();
-  setPresetStatus(`Applied preset: ${song.name || "Untitled preset"}.`);
-}
-
-function exportCurrentPreset() {
-  const obj = {
-    name: el("presetName").value.trim() || "Untitled preset",
-    songUrl: el("songUrl").value.trim(),
-    pianoUrl: el("pianoUrl").value.trim(),
-    songStartSec: ensureNumber(el("songOffset").value, 0),
-    pianoStartSec: ensureNumber(el("pianoOffset").value, 0),
-    countdownSec: Math.max(0, Math.floor(ensureNumber(el("countdownSec").value, 0))),
-    metronomeBpm: clamp(Math.round(ensureNumber(metronomeBpm.value, 92)), 30, 300),
-    metronomeBeatsPerBar: clamp(Math.round(ensureNumber(metronomeBeatsPerBar.value, 4)), 1, 12),
-    loopRepeatTarget: Math.max(0, Math.floor(ensureNumber(loopRepeatsInput.value, 4))),
-    lyrics: el("lyricsPaste").value.trim(),
-    markers: appState.markers.map((m) => ({
-      key: m.key,
-      name: m.name,
-      source: m.source,
-      timeSec: round2(m.timeSec)
-    })),
-    sections: appState.sections.map((s) => ({
-      name: s.name,
-      color: s.color,
-      startSec: round2(s.startSec),
-      endSec: s.endSec == null ? null : round2(s.endSec),
-      repeatCount: s.repeatCount,
-      shortcut: s.shortcut
-    }))
-  };
-
-  el("exportOutput").value = JSON.stringify(obj, null, 2);
-}
-
-async function loadSongs() {
-  try {
-    const res = await fetch("songs.json", { cache: "no-store" });
-    if (!res.ok) throw new Error(`songs.json load failed: ${res.status}`);
-    const data = await res.json();
-    if (!Array.isArray(data)) throw new Error("songs.json must be an array");
-    appState.songs = data;
-    setPresetStatus(`Loaded ${data.length} preset(s).`);
-  } catch (err) {
-    console.warn(err);
-    appState.songs = [];
-    setPresetStatus("Could not load songs.json. Run from a local server.");
-  }
-
-  renderPresetSelect();
-  presetSelect.value = "";
-}
-
-// --- Autosave draft/recovery ---
-function collectDraftState() {
-  return {
-    version: 3,
-    savedAt: Date.now(),
-    fields: {
-      presetName: el("presetName").value,
-      songUrl: el("songUrl").value,
-      pianoUrl: el("pianoUrl").value,
-      songOffset: el("songOffset").value,
-      pianoOffset: el("pianoOffset").value,
-      countdownSec: el("countdownSec").value,
-      lyricsPaste: el("lyricsPaste").value,
-      loopRepeats: loopRepeatsInput.value,
-      metronomeBpm: metronomeBpm.value,
-      metronomeBeatsPerBar: metronomeBeatsPerBar.value,
-      themeMode: document.body.dataset.themeMode || "system"
-    },
-    markers: appState.markers,
-    sections: appState.sections,
-    shortcuts: appState.shortcuts,
-    loop: {
-      aSec: appState.loop.aSec,
-      bSec: appState.loop.bSec,
-      repeatTarget: appState.loop.repeatTarget,
-      enabled: appState.loop.enabled
-    },
-      metronomeEnabled: metronome.enabled
-  };
-}
-
-function saveDraftNow() {
-  const payload = collectDraftState();
-  safeLocalStorageSet(DRAFT_STORAGE_KEY, JSON.stringify(payload));
-}
-
-function scheduleAutosave() {
-  if (autosaveTimer) clearTimeout(autosaveTimer);
-  autosaveTimer = setTimeout(saveDraftNow, 280);
-}
-
-function restoreDraft() {
-  const raw = safeLocalStorageGet(DRAFT_STORAGE_KEY, null);
-  if (!raw) return false;
-
-  try {
-    const draft = JSON.parse(raw);
-    if (!draft || typeof draft !== "object") return false;
-
-    const f = draft.fields || {};
-    if (typeof f.presetName === "string") el("presetName").value = f.presetName;
-    if (typeof f.songUrl === "string") el("songUrl").value = f.songUrl;
-    if (typeof f.pianoUrl === "string") el("pianoUrl").value = f.pianoUrl;
-    if (typeof f.songOffset === "string") el("songOffset").value = f.songOffset;
-    if (typeof f.pianoOffset === "string") el("pianoOffset").value = f.pianoOffset;
-    if (typeof f.countdownSec === "string") el("countdownSec").value = f.countdownSec;
-    if (typeof f.lyricsPaste === "string") el("lyricsPaste").value = f.lyricsPaste;
-    if (typeof f.loopRepeats === "string") loopRepeatsInput.value = f.loopRepeats;
-    if (typeof f.metronomeBpm === "string") metronomeBpm.value = f.metronomeBpm;
-    if (typeof f.metronomeBeatsPerBar === "string") metronomeBeatsPerBar.value = f.metronomeBeatsPerBar;
-
-    if (THEME_MODES.includes(f.themeMode)) applyTheme(f.themeMode, false);
-
-    appState.markers = Array.isArray(draft.markers)
-      ? draft.markers.map(normalizeMarker).filter(Boolean)
-      : [];
-
-    appState.sections = Array.isArray(draft.sections)
-      ? draft.sections.map(normalizeSection).filter(Boolean)
-      : [];
-
-    if (draft.shortcuts && typeof draft.shortcuts === "object") {
-      appState.shortcuts = {
-        playPause: normalizeShortcutValue(draft.shortcuts.playPause, DEFAULT_SHORTCUTS.playPause),
-        restart: normalizeShortcutValue(draft.shortcuts.restart, DEFAULT_SHORTCUTS.restart),
-        mute: normalizeShortcutValue(draft.shortcuts.mute, DEFAULT_SHORTCUTS.mute),
-        lyricsFocus: normalizeShortcutValue(draft.shortcuts.lyricsFocus, DEFAULT_SHORTCUTS.lyricsFocus),
-        practiceMode: normalizeShortcutValue(draft.shortcuts.practiceMode, DEFAULT_SHORTCUTS.practiceMode),
-        metronomeToggle: normalizeShortcutValue(draft.shortcuts.metronomeToggle, DEFAULT_SHORTCUTS.metronomeToggle)
-      };
-    }
-
-    if (draft.loop && typeof draft.loop === "object") {
-      appState.loop.aSec = draft.loop.aSec == null ? null : ensureNumber(draft.loop.aSec, 0);
-      appState.loop.bSec = draft.loop.bSec == null ? null : ensureNumber(draft.loop.bSec, 0);
-      appState.loop.repeatTarget = Math.max(0, Math.floor(ensureNumber(draft.loop.repeatTarget, 4)));
-      appState.loop.enabled = Boolean(draft.loop.enabled);
-    }
-
-    metronome.setBpm(clamp(Math.round(ensureNumber(metronomeBpm.value, 92)), 30, 300));
-    metronome.setBeatsPerBar(clamp(Math.round(ensureNumber(metronomeBeatsPerBar.value, 4)), 1, 12));
-    metronome.setEnabled(Boolean(draft.metronomeEnabled));
-
-    lyrics = el("lyricsPaste").value.trim() ? parseLRC(el("lyricsPaste").value.trim()) : [];
-    renderLyrics();
-    renderMarkersList();
-    renderSectionsList();
-    loadShortcutInputsFromState();
-    renderShortcutsList();
-    renderLoopStatus();
-    setMetronomeButtonLabel();
-
-    setPresetStatus("Recovered previous draft from autosave.");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// --- YouTube API and player lifecycle ---
 function onPlayerStateChange(evt) {
-  const playerKey = getPlayerKeyFromTarget(evt?.target);
+  const playerKey = evt?.target === songPlayer ? "song" : evt?.target === pianoPlayer ? "piano" : "";
   const stateCode = evt?.data;
-
   if (playerKey) {
     if (stateCode === YT.PlayerState.PLAYING) {
-      playerUiState[playerKey].hasStartedPlayback = true;
+      app.playerUiState[playerKey].hasStartedPlayback = true;
       setPlayerStatus(playerKey, "playing");
     } else if (stateCode === YT.PlayerState.BUFFERING) {
       setPlayerStatus(playerKey, "buffering");
+      app.diagnostics.bufferingEvents += 1;
+      renderDiagnostics();
     } else if (stateCode === YT.PlayerState.PAUSED) {
-      setPlayerStatus(playerKey, playerUiState[playerKey].hasStartedPlayback ? "paused" : "ready");
+      setPlayerStatus(playerKey, app.playerUiState[playerKey].hasStartedPlayback ? "paused" : "ready");
     } else if (stateCode === YT.PlayerState.ENDED) {
       setPlayerStatus(playerKey, "ended");
     } else if (stateCode === YT.PlayerState.CUED) {
       setPlayerStatus(playerKey, "ready");
-    } else if (stateCode === YT.PlayerState.UNSTARTED && !isPlayerReady(playerKey)) {
-      setPlayerStatus(playerKey, "loading");
     }
   }
 
   if (!canSync()) return;
-
   const recentPlayRequest = Date.now() - lastPlayRequestAt < 2200;
-
-  if (stateCode === YT.PlayerState.BUFFERING) {
-    appState.diagnostics.bufferingEvents += 1;
-    renderDiagnostics();
-  }
-
   if (stateCode === YT.PlayerState.PLAYING && !isSyncing) {
-    if (isPreparingPlayers || !recentPlayRequest) {
+    if (!recentPlayRequest) {
       songPlayer.pauseVideo();
       pianoPlayer.pauseVideo();
       setSyncing(false);
@@ -1643,14 +1759,11 @@ function onPlayerStateChange(evt) {
     setSyncing(true);
     return;
   }
-
   if (stateCode === YT.PlayerState.PAUSED || stateCode === YT.PlayerState.ENDED) {
     const songState = songPlayer.getPlayerState?.();
     const pianoState = pianoPlayer.getPlayerState?.();
     const eitherPlaying = songState === YT.PlayerState.PLAYING || pianoState === YT.PlayerState.PLAYING;
-    if (!eitherPlaying && isSyncing) {
-      setSyncing(false);
-    }
+    if (!eitherPlaying && isSyncing) setSyncing(false);
   }
 }
 
@@ -1661,7 +1774,6 @@ function ensureYTApi() {
       resolve();
       return;
     }
-
     const script = document.createElement("script");
     script.src = "https://www.youtube.com/iframe_api";
     window.onYouTubeIframeAPIReady = () => resolve();
@@ -1672,95 +1784,62 @@ function ensureYTApi() {
 
 async function loadPlayers() {
   readOffsets();
-
-  const songUrl = el("songUrl").value;
-  const pianoUrl = el("pianoUrl").value;
-  const songIssue = getYouTubeInputIssue("Official clip", songUrl);
-  const pianoIssue = getYouTubeInputIssue("Tutorial", pianoUrl);
-
+  const songIssue = getYouTubeInputIssue("Official clip", dom.songUrl.value);
+  const pianoIssue = getYouTubeInputIssue("Tutorial", dom.pianoUrl.value);
   if (songIssue || pianoIssue) {
-    alert([songIssue, pianoIssue].filter(Boolean).join("\n\n"));
+    showToast([songIssue, pianoIssue].filter(Boolean).join(" "), "danger");
     return;
   }
-
-  const pianoId = extractYouTubeId(pianoUrl);
-  const songId = extractYouTubeId(songUrl);
-
   await ensureYTApi();
 
+  const songId = extractYouTubeId(dom.songUrl.value);
+  const pianoId = extractYouTubeId(dom.pianoUrl.value);
   cancelCountdown();
   setSyncing(false);
-  lastPlayRequestAt = 0;
-  isPreparingPlayers = true;
-  disableTransport();
-  resetPlayerUiState("song");
-  resetPlayerUiState("piano");
-  setPlayerStatus("song", "loading");
-  setPlayerStatus("piano", "loading");
+  resetPlayerState("song");
+  resetPlayerState("piano");
   readySong = false;
   readyPiano = false;
   duration = 0;
-  appState.playWindowEnd = null;
-
-  appState.diagnostics.driftMs = 0;
-  appState.diagnostics.corrections = 0;
-  appState.diagnostics.bufferingEvents = 0;
-  appState.diagnostics.loopCycles = 0;
+  app.diagnostics = { driftMs: 0, corrections: 0, bufferingEvents: 0, loopCycles: 0 };
   renderDiagnostics();
-
+  enableTransport(false);
+  setPlayerStatus("song", "loading");
+  setPlayerStatus("piano", "loading");
   if (songPlayer?.destroy) songPlayer.destroy();
   if (pianoPlayer?.destroy) pianoPlayer.destroy();
 
   const onBothReady = () => {
     if (!readySong || !readyPiano) return;
-
-    duration = Math.max(0, (songPlayer.getDuration?.() || 0) - songStartSec);
-    scrubber.min = "0";
-    scrubber.max = String(duration || 100);
-
-    songPlayer.cueVideoById({ videoId: songId, startSeconds: songStartSec, suggestedQuality: "large" });
-    pianoPlayer.cueVideoById({ videoId: pianoId, startSeconds: pianoStartSec, suggestedQuality: "large" });
-
+    duration = Math.max(0, ensureNumber(songPlayer.getDuration?.(), 0) - songStartSec);
+    dom.scrubber.max = String(duration || 100);
     setTimeout(() => {
       safeSeekBoth(0, true);
       songPlayer.pauseVideo();
       pianoPlayer.pauseVideo();
-      setSyncing(false);
-      enableTransport();
+      enableTransport(true);
       updateMuteIcon();
       setTransportTime(0);
-      setActiveLyricByTime(0);
-      setCalibrateStatus("Players loaded. If both frames match musically, click calibration.");
+      setCalibrateStatus("Players loaded. Calibrate if the frames do not match musically.");
       setPlayerStatus("song", "ready");
       setPlayerStatus("piano", "ready");
-      isPreparingPlayers = false;
-      scheduleAutosave();
-    }, 240);
+    }, 200);
   };
 
   pianoPlayer = new YT.Player("pianoPlayer", {
     width: "100%",
     height: "100%",
     videoId: pianoId,
-    playerVars: {
-      playsinline: 1,
-      rel: 0,
-      modestbranding: 1,
-      iv_load_policy: 3,
-      disablekb: 1
-    },
+    playerVars: { playsinline: 1, rel: 0, modestbranding: 1, iv_load_policy: 3, disablekb: 1 },
     events: {
       onReady: () => {
         readyPiano = true;
         pianoPlayer.mute();
-        updateMuteIcon();
         setPlayerStatus("piano", "ready");
         onBothReady();
       },
       onStateChange: onPlayerStateChange,
-      onError: () => {
-        setPlayerStatus("piano", "error", "Load error");
-      }
+      onError: () => setPlayerStatus("piano", "error", "Load error")
     }
   });
 
@@ -1768,13 +1847,7 @@ async function loadPlayers() {
     width: "100%",
     height: "100%",
     videoId: songId,
-    playerVars: {
-      playsinline: 1,
-      rel: 0,
-      modestbranding: 1,
-      iv_load_policy: 3,
-      disablekb: 1
-    },
+    playerVars: { playsinline: 1, rel: 0, modestbranding: 1, iv_load_policy: 3, disablekb: 1 },
     events: {
       onReady: () => {
         readySong = true;
@@ -1782,247 +1855,278 @@ async function loadPlayers() {
         onBothReady();
       },
       onStateChange: onPlayerStateChange,
-      onError: () => {
-        setPlayerStatus("song", "error", "Load error");
-      }
+      onError: () => setPlayerStatus("song", "error", "Load error")
     }
   });
 }
 
-// --- Metronome UI ---
-function setMetronomeButtonLabel() {
-  toggleMetronomeBtn.textContent = metronome.enabled ? "Metronome On" : "Metronome Off";
-}
-
-function toggleMetronome() {
-  metronome.setBpm(ensureNumber(metronomeBpm.value, 92));
-  metronome.setBeatsPerBar(ensureNumber(metronomeBeatsPerBar.value, 4));
-  metronome.setEnabled(!metronome.enabled);
-  metronome.syncWithPlayback(isSyncing);
-  setMetronomeButtonLabel();
-  scheduleAutosave();
-}
-
-// --- Events ---
-loadBtn.addEventListener("click", loadPlayers);
-calibrateBtn.addEventListener("click", calibrateUsingCurrentFrame);
-playBtn.addEventListener("click", togglePlayPause);
-restartBtn.addEventListener("click", restart);
-mutePianoBtn.addEventListener("click", toggleMutePiano);
-resyncBtn.addEventListener("click", resyncNow);
-
-el("usePastedBtn").addEventListener("click", usePastedLyrics);
-el("exportPresetBtn").addEventListener("click", exportCurrentPreset);
-
-el("applyPresetBtn").addEventListener("click", () => {
-  const idx = Number.parseInt(presetSelect.value, 10);
-  if (Number.isFinite(idx) && appState.songs[idx]) {
-    applyPreset(appState.songs[idx]);
-  }
-});
-
-presetSelect.addEventListener("change", () => {
-  const idx = Number.parseInt(presetSelect.value, 10);
-  if (Number.isFinite(idx) && appState.songs[idx]) {
-    applyPreset(appState.songs[idx]);
-  }
-});
-
-toggleConfigBtn.addEventListener("click", () => {
-  const collapsed = !configPanel.classList.contains("is-collapsed");
-  setConfigCollapsed(collapsed);
-});
-
-scrubber.addEventListener("input", () => {
-  userScrubbing = true;
-  const t = ensureNumber(scrubber.value, 0);
-  setTransportTime(t);
-  setActiveLyricByTime(t);
-});
-
-scrubber.addEventListener("change", () => {
+function resyncNow() {
   if (!canSync()) return;
-  const t = ensureNumber(scrubber.value, 0);
-  safeSeekBoth(t);
-  userScrubbing = false;
-});
+  safeSeekBoth(getMasterTime(), true);
+}
 
-scrubber.addEventListener("mouseup", () => {
-  userScrubbing = false;
-});
+function escapeHtml(text) {
+  return String(text ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
 
-scrubber.addEventListener("touchend", () => {
-  userScrubbing = false;
-});
+function handleCookieBanner() {
+  const saved = safeGet(STORAGE_KEYS.cookies, null);
+  if (!saved) {
+    dom.cookieBanner.classList.remove("hidden");
+  }
+}
 
-shortcutsBtn.addEventListener("click", openShortcuts);
-closeShortcutsBtn.addEventListener("click", closeShortcuts);
-shortcutsModal.addEventListener("click", (evt) => {
-  if (evt.target === shortcutsModal) closeShortcuts();
-});
+function acceptCookies(optionalAllowed) {
+  safeSet(STORAGE_KEYS.cookies, JSON.stringify({
+    essential: true,
+    optional: Boolean(optionalAllowed),
+    savedAt: Date.now()
+  }));
+  dom.cookieBanner.classList.add("hidden");
+}
 
-themeBtn.addEventListener("click", () => {
-  const currentMode = document.body.dataset.themeMode || "system";
-  applyTheme(nextThemeMode(currentMode), true);
-  scheduleAutosave();
-});
+async function deleteAccount() {
+  if (!app.profile?.deletionEnabled) return;
+  dom.deleteAccountStatus.textContent = "Deleting account…";
+  try {
+    await apiFetch("/api/me/account/delete", { method: "POST", body: JSON.stringify({}) });
+    await app.supabase.auth.signOut();
+    dom.deleteAccountStatus.textContent = "Account deleted.";
+    closeModal(dom.profileModal);
+    createNewDraft();
+    showToast("Account deletion completed.");
+  } catch (error) {
+    dom.deleteAccountStatus.textContent = error.message;
+  }
+}
 
-lyricsFocusBtn.addEventListener("click", () => {
-  document.body.classList.toggle("lyrics-focus");
-});
+async function initBootstrap() {
+  app.bootstrap = await apiFetch("/api/bootstrap", { method: "GET" });
+  setBootstrapStatus("Configuration loaded.");
+  const localSettings = safeGet(STORAGE_KEYS.settings, null);
+  applySettings(localSettings ? JSON.parse(localSettings) : getDefaultSettings(), false);
+  initTheme();
+}
 
-practiceModeBtn.addEventListener("click", togglePracticeMode);
-document.addEventListener("fullscreenchange", onFullscreenChange);
+async function initSupabase() {
+  if (!window.supabase?.createClient) {
+    throw new Error("Supabase browser client failed to load.");
+  }
+  app.supabase = window.supabase.createClient(
+    app.bootstrap.supabase.url,
+    app.bootstrap.supabase.publishableKey,
+    { auth: { autoRefreshToken: true, persistSession: true } }
+  );
+  const { data } = await app.supabase.auth.getSession();
+  app.session = data.session || null;
+  app.supabase.auth.onAuthStateChange((_event, session) => {
+    handleSessionChanged(session);
+  });
+  await handleSessionChanged(app.session);
+}
 
-useCurrentMarkerBtn.addEventListener("click", setMarkerTimeFromCurrent);
-addMarkerBtn.addEventListener("click", addOrUpdateMarkerFromForm);
+function bindEvents() {
+  dom.themeBtn.addEventListener("click", () => {
+    const current = document.body.dataset.themeMode || "system";
+    const next = nextThemeMode(current);
+    applyTheme(next, true);
+    app.settings.themeMode = next;
+    if (app.session?.user) saveProfileSettings();
+  });
 
-useCurrentSectionStartBtn.addEventListener("click", setSectionStartFromCurrent);
-useCurrentSectionEndBtn.addEventListener("click", setSectionEndFromCurrent);
-addSectionBtn.addEventListener("click", addOrUpdateSectionFromForm);
+  dom.loginBtn.addEventListener("click", () => openAuthModal("login"));
+  dom.signupBtn.addEventListener("click", () => openAuthModal("signup"));
+  dom.heroCreateSongBtn.addEventListener("click", createNewDraft);
+  dom.createSongBtn.addEventListener("click", createNewDraft);
+  dom.newDraftBtn.addEventListener("click", createNewDraft);
+  dom.profileBtn.addEventListener("click", openProfileModal);
+  dom.logoutBtn.addEventListener("click", async () => {
+    await app.supabase.auth.signOut();
+    showToast("Logged out.");
+  });
 
-setLoopABtn.addEventListener("click", () => setLoopPoint("a"));
-setLoopBBtn.addEventListener("click", () => setLoopPoint("b"));
-toggleLoopBtn.addEventListener("click", toggleLoopEnabled);
-clearLoopBtn.addEventListener("click", clearLoop);
+  dom.authTabLogin.addEventListener("click", () => openAuthModal("login"));
+  dom.authTabSignup.addEventListener("click", () => openAuthModal("signup"));
+  dom.authForm.addEventListener("submit", handleAuthSubmit);
+  dom.closeAuthModalBtn.addEventListener("click", () => closeModal(dom.authModal));
+  dom.closeProfileModalBtn.addEventListener("click", () => closeModal(dom.profileModal));
+  dom.openShortcutsBtn.addEventListener("click", () => openModal(dom.shortcutsModal));
+  dom.closeShortcutsBtn.addEventListener("click", () => closeModal(dom.shortcutsModal));
+  dom.shortcutsModal.addEventListener("click", (event) => {
+    if (event.target === dom.shortcutsModal) closeModal(dom.shortcutsModal);
+  });
+  dom.authModal.addEventListener("click", (event) => {
+    if (event.target === dom.authModal) closeModal(dom.authModal);
+  });
+  dom.profileModal.addEventListener("click", (event) => {
+    if (event.target === dom.profileModal) closeModal(dom.profileModal);
+  });
 
-loopRepeatsInput.addEventListener("change", () => {
-  appState.loop.repeatTarget = Math.max(0, Math.floor(ensureNumber(loopRepeatsInput.value, 4)));
-  renderLoopStatus();
-  scheduleAutosave();
-});
+  dom.songSearch.addEventListener("input", () => {
+    app.searchTerm = dom.songSearch.value;
+    renderLobby();
+  });
 
-metronomeBpm.addEventListener("change", () => {
-  const bpm = clamp(Math.round(ensureNumber(metronomeBpm.value, 92)), 30, 300);
-  metronomeBpm.value = String(bpm);
-  metronome.setBpm(bpm);
-  scheduleAutosave();
-});
+  dom.loadBtn.addEventListener("click", loadPlayers);
+  dom.saveSongBtn.addEventListener("click", saveCurrentSong);
+  dom.calibrateBtn.addEventListener("click", calibrateUsingCurrentFrame);
+  dom.usePastedBtn.addEventListener("click", usePastedLyrics);
+  dom.exportPresetBtn.addEventListener("click", exportCurrentSong);
+  dom.captureMarkerBtn.addEventListener("click", captureMarkerAtCurrentTime);
+  dom.useCurrentMarkerBtn.addEventListener("click", () => {
+    dom.markerTime.value = String(round2(canSync() ? getMasterTime() : ensureNumber(dom.scrubber.value, 0)));
+  });
+  dom.addMarkerBtn.addEventListener("click", addOrUpdateMarkerFromForm);
+  dom.useCurrentSectionStartBtn.addEventListener("click", setSectionStartFromCurrent);
+  dom.useCurrentSectionEndBtn.addEventListener("click", setSectionEndFromCurrent);
+  dom.addSectionBtn.addEventListener("click", addOrUpdateSectionFromForm);
+  dom.saveShortcutsBtn.addEventListener("click", saveProfileSettings);
+  dom.resetShortcutsBtn.addEventListener("click", resetSettings);
+  dom.playBtn.addEventListener("click", togglePlayPause);
+  dom.restartBtn.addEventListener("click", restart);
+  dom.mutePianoBtn.addEventListener("click", toggleMutePiano);
+  dom.toggleLoopBtn.addEventListener("click", toggleLoopEnabled);
+  dom.setLoopABtn.addEventListener("click", () => setLoopPoint("a"));
+  dom.setLoopBBtn.addEventListener("click", () => setLoopPoint("b"));
+  dom.clearLoopBtn.addEventListener("click", clearLoop);
+  dom.toggleMetronomeBtn.addEventListener("click", toggleMetronome);
+  dom.resyncBtn.addEventListener("click", resyncNow);
+  dom.practiceModeBtn.addEventListener("click", () => togglePracticeMode());
+  dom.togglePracticeHelperBtn.addEventListener("click", () => {
+    app.practiceHelperVisible = !app.practiceHelperVisible;
+    dom.showPracticeShortcutLegend.value = String(app.practiceHelperVisible);
+    renderPracticeHelperVisibility();
+    scheduleAutosave();
+  });
+  dom.deleteAccountBtn.addEventListener("click", deleteAccount);
+  dom.cookieEssentialBtn.addEventListener("click", () => acceptCookies(false));
+  dom.cookieAcceptBtn.addEventListener("click", () => acceptCookies(true));
 
-metronomeBeatsPerBar.addEventListener("change", () => {
-  const beats = clamp(Math.round(ensureNumber(metronomeBeatsPerBar.value, 4)), 1, 12);
-  metronomeBeatsPerBar.value = String(beats);
-  metronome.setBeatsPerBar(beats);
-  scheduleAutosave();
-});
+  dom.scrubber.addEventListener("input", () => {
+    userScrubbing = true;
+    const time = ensureNumber(dom.scrubber.value, 0);
+    setTransportTime(time);
+    setActiveLyricByTime(time);
+  });
+  dom.scrubber.addEventListener("change", () => {
+    if (canSync()) safeSeekBoth(ensureNumber(dom.scrubber.value, 0), true);
+    userScrubbing = false;
+  });
 
-toggleMetronomeBtn.addEventListener("click", toggleMetronome);
+  document.addEventListener("input", (event) => {
+    if (event.target?.id === "exportOutput") return;
+    scheduleAutosave();
+  });
 
-saveShortcutsBtn.addEventListener("click", applyShortcutInputs);
-resetShortcutsBtn.addEventListener("click", resetShortcuts);
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+  window.addEventListener("keydown", handleKeydown);
+}
 
-window.addEventListener("keydown", (e) => {
-  const key = e.key;
+function handleKeydown(event) {
+  if (!app.settings) return;
   const activeTag = document.activeElement?.tagName;
   const typing = activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT";
 
-  if (key === "?" && !typing) {
-    e.preventDefault();
-    if (shortcutsModal.classList.contains("hidden")) openShortcuts();
-    else closeShortcuts();
+  if (event.key === "?" && !typing) {
+    event.preventDefault();
+    dom.shortcutsModal.classList.contains("hidden") ? openModal(dom.shortcutsModal) : closeModal(dom.shortcutsModal);
     return;
   }
-
-  if (key === "Escape" && !shortcutsModal.classList.contains("hidden")) {
-    closeShortcuts();
-    return;
+  if (event.key === "Escape") {
+    closeModal(dom.shortcutsModal);
+    closeModal(dom.authModal);
+    closeModal(dom.profileModal);
   }
-
   if (typing) return;
 
-  if (keyMatchesShortcut(e, appState.shortcuts.playPause)) {
-    e.preventDefault();
+  const shortcuts = app.settings.shortcuts;
+  if (keyMatchesShortcut(event, shortcuts.playPause)) {
+    event.preventDefault();
     togglePlayPause();
     return;
   }
-
-  if (keyMatchesShortcut(e, appState.shortcuts.restart)) {
+  if (keyMatchesShortcut(event, shortcuts.restart)) {
     restart();
     return;
   }
-
-  if (keyMatchesShortcut(e, appState.shortcuts.mute)) {
+  if (keyMatchesShortcut(event, shortcuts.mute)) {
     toggleMutePiano();
     return;
   }
-
-  if (keyMatchesShortcut(e, appState.shortcuts.lyricsFocus)) {
+  if (keyMatchesShortcut(event, shortcuts.lyricsFocus)) {
     document.body.classList.toggle("lyrics-focus");
     return;
   }
-
-  if (keyMatchesShortcut(e, appState.shortcuts.practiceMode)) {
+  if (keyMatchesShortcut(event, shortcuts.practiceMode)) {
     togglePracticeMode();
     return;
   }
-
-  if (keyMatchesShortcut(e, appState.shortcuts.metronomeToggle)) {
+  if (keyMatchesShortcut(event, shortcuts.metronomeToggle)) {
     toggleMetronome();
     return;
   }
-
-  if (key === "0" && canSync()) {
-    cancelCountdown();
-    songPlayer.pauseVideo();
-    pianoPlayer.pauseVideo();
-    setSyncing(false);
-    safeSeekBoth(0);
+  if (keyMatchesShortcut(event, shortcuts.toggleShortcutLegend)) {
+    app.practiceHelperVisible = !app.practiceHelperVisible;
+    dom.showPracticeShortcutLegend.value = String(app.practiceHelperVisible);
+    renderPracticeHelperVisibility();
+    scheduleAutosave();
+    return;
+  }
+  if (keyMatchesShortcut(event, shortcuts.captureMarker)) {
+    captureMarkerAtCurrentTime();
+    return;
+  }
+  if (event.key === "ArrowLeft" && canSync()) {
+    safeSeekBoth(getMasterTime() - 5, true);
+    return;
+  }
+  if (event.key === "ArrowRight" && canSync()) {
+    safeSeekBoth(getMasterTime() + 5, true);
     return;
   }
 
-  if (key === "ArrowLeft" && canSync()) {
-    const t = clampMasterTime(getMasterTime() - 5);
-    safeSeekBoth(t);
-    return;
+  const assignments = getMarkerJumpAssignments();
+  for (const marker of app.markers) {
+    const key = assignments.get(marker.id);
+    if (key && event.key.toUpperCase() === key.toUpperCase()) {
+      jumpToMarker(marker.id);
+      return;
+    }
   }
 
-  if (key === "ArrowRight" && canSync()) {
-    const t = clampMasterTime(getMasterTime() + 5);
-    safeSeekBoth(t);
-    return;
+  const section = app.sections.find((item) => item.shortcut && item.shortcut.toUpperCase() === event.key.toUpperCase());
+  if (section) playSection(section, false);
+}
+
+async function init() {
+  applySettings(getStoredSettingsOrDefault(), false);
+  populateSectionShortcutOptions();
+  renderLoopStatus();
+  renderDiagnostics();
+  enableTransport(false);
+  setPlayerStatus("song", "idle");
+  setPlayerStatus("piano", "idle");
+  bindEvents();
+  handleCookieBanner();
+  restoreDraft();
+  try {
+    await initBootstrap();
+    await initSupabase();
+  } catch (error) {
+    setBootstrapStatus(error.message);
+    showToast(error.message, "danger");
   }
+  renderLyrics();
+  renderMarkersList();
+  renderSectionsList();
+  renderShortcutsModal();
+  setMetronomeButtonLabel();
+  renderEditorHeader();
+}
 
-  if (MARKER_KEYS.includes(key)) {
-    jumpToMarkerKey(key);
-    return;
-  }
-
-  const section = findSectionByShortcut(key);
-  if (section) {
-    playSection(section, false);
-  }
-});
-
-window.addEventListener("resize", () => {
-  schedulePracticeLyricsFit();
-});
-
-document.addEventListener("input", (evt) => {
-  const id = evt.target?.id;
-  if (id === "exportOutput") return;
-  scheduleAutosave();
-});
-
-document.addEventListener("change", (evt) => {
-  const id = evt.target?.id;
-  if (id === "exportOutput") return;
-  scheduleAutosave();
-});
-
-// --- Init ---
-populateMarkerKeys();
-populateSectionShortcutOptions();
-initTheme();
-loadShortcutMap();
-setConfigCollapsed(false);
-disableTransport();
-renderLyrics();
-renderMarkersList();
-renderSectionsList();
-renderShortcutsList();
-renderLoopStatus();
-renderDiagnostics();
-updateMuteIcon();
-setMetronomeButtonLabel();
-metronome.setBeatsPerBar(clamp(Math.round(ensureNumber(metronomeBeatsPerBar.value, 4)), 1, 12));
-loadSongs();
+init();

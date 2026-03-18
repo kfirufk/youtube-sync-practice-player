@@ -32,6 +32,14 @@ A Go + PostgreSQL practice player for syncing a tutorial video and an official c
 
 The Go server applies any new SQL patches from `db/patches/` before it starts serving the app.
 
+On a Mac development machine you can also run:
+
+```bash
+./start-dev.sh
+```
+
+`start-dev.sh` waits for the app to become healthy, opens the browser automatically, and still applies any new SQL patches through the Go startup flow.
+
 ## Important files
 
 - `main.go`: HTTP server, API routes, and static-file serving

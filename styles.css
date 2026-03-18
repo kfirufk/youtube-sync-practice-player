@@ -247,13 +247,76 @@ button.primary {
   min-width: 0;
 }
 
-.playerTitle {
+.playerHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   margin: 0 0 6px 4px;
+}
+
+.playerTitle {
+  margin: 0;
   font-size: 0.86rem;
   color: var(--ink-soft);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.playerStatusBadge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--card-border);
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.playerStatusBadge::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.95;
+}
+
+.playerStatusBadge[data-state="idle"] {
+  color: var(--ink-soft);
+}
+
+.playerStatusBadge[data-state="loading"],
+.playerStatusBadge[data-state="buffering"] {
+  color: #f59e0b;
+}
+
+.playerStatusBadge[data-state="ready"] {
+  color: #22c55e;
+}
+
+.playerStatusBadge[data-state="playing"] {
+  color: #38bdf8;
+}
+
+.playerStatusBadge[data-state="paused"] {
+  color: #eab308;
+}
+
+.playerStatusBadge[data-state="ended"] {
+  color: #c084fc;
+}
+
+.playerStatusBadge[data-state="error"] {
+  color: var(--danger);
 }
 
 .playerBox {
@@ -432,8 +495,17 @@ body.practice-mode .playerWrap {
 }
 
 body.practice-mode .playerTitle {
-  margin: 0 0 2px 2px;
   font-size: 0.66rem;
+}
+
+body.practice-mode .playerHeading {
+  margin: 0 0 2px 2px;
+}
+
+body.practice-mode .playerStatusBadge {
+  min-height: 22px;
+  padding: 3px 8px;
+  font-size: 0.64rem;
 }
 
 body.practice-mode .playerBox {

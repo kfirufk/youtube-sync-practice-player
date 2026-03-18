@@ -13,6 +13,16 @@ const THEME_MODES = ["system", "dark", "light"];
 const THEME_STORAGE_KEY = "practice-player-theme-mode";
 const DRAFT_STORAGE_KEY = "practice-player-draft-v3";
 const SHORTCUT_STORAGE_KEY = "practice-player-shortcuts-v1";
+const PLAYER_STATUS_LABELS = {
+  idle: "Not loaded",
+  loading: "Loading",
+  ready: "Ready",
+  playing: "Playing",
+  paused: "Paused",
+  buffering: "Buffering",
+  ended: "Ended",
+  error: "Error"
+};
 
 const DEFAULT_SHORTCUTS = {
   playPause: "Space",
@@ -245,6 +255,10 @@ let lastActiveIdx = -1;
 let practiceCurrentLyricEl = null;
 let practiceCompactLyricsEl = null;
 let practiceFitRaf = 0;
+const playerUiState = {
+  song: { hasStartedPlayback: false },
+  piano: { hasStartedPlayback: false }
+};
 
 const appState = {
   songs: [],
@@ -292,6 +306,8 @@ const closeShortcutsBtn = el("closeShortcutsBtn");
 const shortcutsList = el("shortcutsList");
 const lyricsFocusBtn = el("lyricsFocusBtn");
 const practiceModeBtn = el("practiceModeBtn");
+const songPlayerStatus = el("songPlayerStatus");
+const pianoPlayerStatus = el("pianoPlayerStatus");
 
 const markerName = el("markerName");
 const markerKey = el("markerKey");
@@ -349,6 +365,32 @@ function setCalibrateStatus(text) {
 
 function setShortcutStatus(text) {
   shortcutStatus.textContent = text || "";
+}
+
+function getPlayerStatusEl(which) {
+  return which === "song" ? songPlayerStatus : pianoPlayerStatus;
+}
+
+function setPlayerStatus(which, state, label = "") {
+  const statusEl = getPlayerStatusEl(which);
+  if (!statusEl) return;
+  statusEl.dataset.state = state;
+  statusEl.textContent = label || PLAYER_STATUS_LABELS[state] || state;
+}
+
+function resetPlayerUiState(which) {
+  if (!playerUiState[which]) return;
+  playerUiState[which].hasStartedPlayback = false;
+}
+
+function getPlayerKeyFromTarget(target) {
+  if (target === songPlayer) return "song";
+  if (target === pianoPlayer) return "piano";
+  return "";
+}
+
+function isPlayerReady(which) {
+  return which === "song" ? readySong : readyPiano;
 }
 
 function renderDiagnostics() {
@@ -1562,9 +1604,28 @@ function restoreDraft() {
 
 // --- YouTube API and player lifecycle ---
 function onPlayerStateChange(evt) {
+  const playerKey = getPlayerKeyFromTarget(evt?.target);
+  const stateCode = evt?.data;
+
+  if (playerKey) {
+    if (stateCode === YT.PlayerState.PLAYING) {
+      playerUiState[playerKey].hasStartedPlayback = true;
+      setPlayerStatus(playerKey, "playing");
+    } else if (stateCode === YT.PlayerState.BUFFERING) {
+      setPlayerStatus(playerKey, "buffering");
+    } else if (stateCode === YT.PlayerState.PAUSED) {
+      setPlayerStatus(playerKey, playerUiState[playerKey].hasStartedPlayback ? "paused" : "ready");
+    } else if (stateCode === YT.PlayerState.ENDED) {
+      setPlayerStatus(playerKey, "ended");
+    } else if (stateCode === YT.PlayerState.CUED) {
+      setPlayerStatus(playerKey, "ready");
+    } else if (stateCode === YT.PlayerState.UNSTARTED && !isPlayerReady(playerKey)) {
+      setPlayerStatus(playerKey, "loading");
+    }
+  }
+
   if (!canSync()) return;
 
-  const stateCode = evt?.data;
   const recentPlayRequest = Date.now() - lastPlayRequestAt < 2200;
 
   if (stateCode === YT.PlayerState.BUFFERING) {
@@ -1632,6 +1693,10 @@ async function loadPlayers() {
   lastPlayRequestAt = 0;
   isPreparingPlayers = true;
   disableTransport();
+  resetPlayerUiState("song");
+  resetPlayerUiState("piano");
+  setPlayerStatus("song", "loading");
+  setPlayerStatus("piano", "loading");
   readySong = false;
   readyPiano = false;
   duration = 0;
@@ -1666,6 +1731,8 @@ async function loadPlayers() {
       setTransportTime(0);
       setActiveLyricByTime(0);
       setCalibrateStatus("Players loaded. If both frames match musically, click calibration.");
+      setPlayerStatus("song", "ready");
+      setPlayerStatus("piano", "ready");
       isPreparingPlayers = false;
       scheduleAutosave();
     }, 240);
@@ -1687,9 +1754,13 @@ async function loadPlayers() {
         readyPiano = true;
         pianoPlayer.mute();
         updateMuteIcon();
+        setPlayerStatus("piano", "ready");
         onBothReady();
       },
-      onStateChange: onPlayerStateChange
+      onStateChange: onPlayerStateChange,
+      onError: () => {
+        setPlayerStatus("piano", "error", "Load error");
+      }
     }
   });
 
@@ -1707,9 +1778,13 @@ async function loadPlayers() {
     events: {
       onReady: () => {
         readySong = true;
+        setPlayerStatus("song", "ready");
         onBothReady();
       },
-      onStateChange: onPlayerStateChange
+      onStateChange: onPlayerStateChange,
+      onError: () => {
+        setPlayerStatus("song", "error", "Load error");
+      }
     }
   });
 }

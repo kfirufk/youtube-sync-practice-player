@@ -215,11 +215,17 @@
 <main>
   <section class="players">
     <div class="playerWrap">
-      <p class="playerTitle">Tutorial</p>
+      <div class="playerHeading">
+        <p class="playerTitle">Tutorial</p>
+        <span id="pianoPlayerStatus" class="playerStatusBadge" data-state="idle" aria-live="polite">Not loaded</span>
+      </div>
       <div class="playerBox"><div id="pianoPlayer"></div></div>
     </div>
     <div class="playerWrap">
-      <p class="playerTitle">Official Clip</p>
+      <div class="playerHeading">
+        <p class="playerTitle">Official Clip</p>
+        <span id="songPlayerStatus" class="playerStatusBadge" data-state="idle" aria-live="polite">Not loaded</span>
+      </div>
       <div class="playerBox"><div id="songPlayer"></div></div>
     </div>
   </section>

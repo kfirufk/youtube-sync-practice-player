@@ -393,6 +393,24 @@ function getYouTubeThumbnail(url) {
   return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : "";
 }
 
+function getAuthErrorFeedback(error) {
+  const rawMessage = String(error?.message || "").trim();
+  const rawCode = String(error?.code || "").trim().toLowerCase();
+  const normalized = rawMessage.toLowerCase();
+
+  if (rawCode === "email_not_confirmed" || normalized.includes("email not confirmed")) {
+    return {
+      inline: "Please confirm your email before logging in. Check your inbox and spam for the confirmation link, then try again.",
+      toast: "Email not confirmed yet. Check your inbox and spam, then log in again."
+    };
+  }
+
+  return {
+    inline: rawMessage || "Authentication failed.",
+    toast: rawMessage || "Authentication failed."
+  };
+}
+
 function getYouTubeInputIssue(label, rawUrl) {
   const value = String(rawUrl || "").trim();
   if (!value) return `${label} URL is required.`;
@@ -1530,8 +1548,9 @@ async function handleAuthSubmit(event) {
     closeModal(dom.authModal);
     showToast("Logged in.", "success");
   } catch (error) {
-    dom.authStatus.textContent = error.message || "Authentication failed.";
-    showToast(error.message || "Authentication failed.", "danger");
+    const feedback = getAuthErrorFeedback(error);
+    dom.authStatus.textContent = feedback.inline;
+    showToast(feedback.toast, "danger");
   }
 }
 

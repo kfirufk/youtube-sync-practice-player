@@ -742,7 +742,8 @@ input[type="range"] {
 
 .lobbyGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 420px));
+  justify-content: start;
   gap: 14px;
 }
 
@@ -750,6 +751,7 @@ input[type="range"] {
   border: 1px solid var(--panel-border);
   border-radius: 22px;
   padding: 16px;
+  width: min(100%, 420px);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)),
     radial-gradient(circle at top right, rgba(14, 165, 233, 0.14), transparent 42%),

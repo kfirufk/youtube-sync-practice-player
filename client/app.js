@@ -34,6 +34,8 @@ const STORAGE_KEYS = {
 
 const dom = {
   bootstrapStatus: el("bootstrapStatus"),
+  navLobbyBtn: el("navLobbyBtn"),
+  navWorkspaceBtn: el("navWorkspaceBtn"),
   authIndicator: el("authIndicator"),
   loginBtn: el("loginBtn"),
   signupBtn: el("signupBtn"),
@@ -45,6 +47,12 @@ const dom = {
   createSongBtn: el("createSongBtn"),
   songSearch: el("songSearch"),
   lobbyGrid: el("lobbyGrid"),
+  workspaceSection: el("workspaceSection"),
+  practiceContextBar: el("practiceContextBar"),
+  practiceSongTitle: el("practiceSongTitle"),
+  practiceSongMeta: el("practiceSongMeta"),
+  practiceBackBtn: el("practiceBackBtn"),
+  practiceWorkspaceBtn: el("practiceWorkspaceBtn"),
   workspaceTitle: el("workspaceTitle"),
   editorStatus: el("editorStatus"),
   editorModeBadge: el("editorModeBadge"),
@@ -165,6 +173,8 @@ const app = {
   currentSongId: "",
   currentSongCanEdit: false,
   currentSongOwner: "",
+  screen: "lobby",
+  returnScreen: "lobby",
   lyrics: [],
   markers: [],
   sections: [],
@@ -348,11 +358,20 @@ function keyMatchesShortcut(event, shortcut) {
   return event.key === shortcut || event.code === shortcut;
 }
 
-function showToast(message, kind = "") {
+function showToast(message, kind = "info") {
+  if (!message) return;
   const node = document.createElement("div");
   node.className = "toast";
-  node.textContent = message;
-  if (kind === "danger") node.style.borderColor = "rgba(239,68,68,0.4)";
+  node.dataset.kind = kind || "info";
+  const title = document.createElement("strong");
+  title.textContent = kind === "danger"
+    ? "Heads up"
+    : kind === "success"
+      ? "Done"
+      : "Notice";
+  const body = document.createElement("div");
+  body.textContent = message;
+  node.append(title, body);
   dom.toastRegion.appendChild(node);
   setTimeout(() => node.remove(), 3200);
 }
@@ -367,6 +386,11 @@ function extractYouTubeId(url) {
   } catch {
     return "";
   }
+}
+
+function getYouTubeThumbnail(url) {
+  const id = extractYouTubeId(url);
+  return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : "";
 }
 
 function getYouTubeInputIssue(label, rawUrl) {
@@ -536,6 +560,140 @@ function setAuthIndicator() {
   dom.logoutBtn.classList.toggle("hidden", !authed);
 }
 
+function canCreateSongs() {
+  return Boolean(app.session?.user);
+}
+
+function canEditCurrentSong() {
+  return Boolean(app.session?.user && app.currentSongId && app.currentSongCanEdit);
+}
+
+function canAccessWorkspace() {
+  return canCreateSongs() && (!app.currentSongId || app.currentSongCanEdit);
+}
+
+function hasPracticeCandidate() {
+  return Boolean(app.currentSongId || (dom.songUrl.value.trim() && dom.pianoUrl.value.trim()));
+}
+
+function currentSongLabel() {
+  const title = dom.songTitle.value.trim() || "Untitled song";
+  const artist = dom.songArtist.value.trim();
+  return artist ? `${artist} — ${title}` : title;
+}
+
+function renderCreateActions() {
+  const authed = canCreateSongs();
+  dom.heroCreateSongBtn.textContent = authed ? "Create a new sync" : "Log in to create songs";
+  dom.createSongBtn.textContent = authed ? "New song" : "Log in to add songs";
+  dom.newDraftBtn.disabled = !authed;
+  dom.navWorkspaceBtn.classList.toggle("hidden", !canAccessWorkspace());
+  dom.practiceWorkspaceBtn.classList.toggle("hidden", !canEditCurrentSong());
+}
+
+function renderPracticeContext() {
+  dom.practiceContextBar.classList.toggle("hidden", app.screen !== "practice");
+  dom.practiceBackBtn.textContent = app.returnScreen === "workspace" && canAccessWorkspace()
+    ? "Back to workspace"
+    : "Back to songs";
+
+  if (!app.currentSongId) {
+    dom.practiceSongTitle.textContent = "Pick a song to start practicing";
+    dom.practiceSongMeta.textContent = "The focused practice view keeps the heavy editor out of sight until you need it.";
+    return;
+  }
+
+  dom.practiceSongTitle.textContent = currentSongLabel();
+  const owner = app.currentSongOwner || "Creator";
+  dom.practiceSongMeta.textContent = canEditCurrentSong()
+    ? `Created by ${owner}. Practice first, then jump into the workspace whenever you want to fine-tune the sync.`
+    : `Created by ${owner}. This song is available for practice, while editing stays locked to its creator.`;
+}
+
+function pausePlayback() {
+  cancelCountdown();
+  if (songPlayer?.pauseVideo) songPlayer.pauseVideo();
+  if (pianoPlayer?.pauseVideo) pianoPlayer.pauseVideo();
+  setSyncing(false);
+}
+
+function resetPlayers() {
+  pausePlayback();
+  readySong = false;
+  readyPiano = false;
+  duration = 0;
+  app.diagnostics = { driftMs: 0, corrections: 0, bufferingEvents: 0, loopCycles: 0 };
+  if (songPlayer?.destroy) songPlayer.destroy();
+  if (pianoPlayer?.destroy) pianoPlayer.destroy();
+  songPlayer = null;
+  pianoPlayer = null;
+  enableTransport(false);
+  renderDiagnostics();
+  setTransportTime(0);
+  setPlayerStatus("song", "idle");
+  setPlayerStatus("piano", "idle");
+  setCalibrateStatus("");
+  updateMuteIcon();
+}
+
+function renderShell() {
+  document.body.dataset.screen = app.screen;
+  dom.navLobbyBtn.classList.toggle("active", app.screen === "lobby");
+  dom.navWorkspaceBtn.classList.toggle("active", app.screen === "workspace");
+  dom.practiceModeBtn.textContent = "Open fullscreen practice";
+  renderCreateActions();
+  renderPracticeContext();
+}
+
+function setScreen(nextScreen, options = {}) {
+  let target = nextScreen;
+  if (target === "workspace" && !canAccessWorkspace()) target = "lobby";
+  if (target === "practice" && !hasPracticeCandidate()) {
+    target = canAccessWorkspace() ? "workspace" : "lobby";
+  }
+
+  if (target === "practice") {
+    app.returnScreen = options.returnScreen || (app.screen === "workspace" ? "workspace" : "lobby");
+  }
+
+  if (target === "lobby") {
+    pausePlayback();
+  }
+
+  app.screen = target;
+  renderShell();
+
+  if (target === "practice") {
+    if (options.requestFullscreen && document.documentElement.requestFullscreen && !document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  } else if (document.exitFullscreen && document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+function createSongThumb(label, imageUrl, title) {
+  const thumb = document.createElement("div");
+  thumb.className = "songThumb";
+  if (imageUrl) {
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.src = imageUrl;
+    img.alt = `${title} ${label} thumbnail`;
+    thumb.appendChild(img);
+  } else {
+    const fallback = document.createElement("div");
+    fallback.className = "songThumbFallback";
+    fallback.textContent = label;
+    thumb.appendChild(fallback);
+  }
+  const badge = document.createElement("span");
+  badge.className = "songThumbLabel";
+  badge.textContent = label;
+  thumb.appendChild(badge);
+  return thumb;
+}
+
 function applySettingsToInputs() {
   const settings = app.settings;
   dom.autoPracticeOnPlay.value = String(Boolean(settings.autoEnterPracticeOnPlay));
@@ -632,7 +790,7 @@ function renderLobby() {
   const filter = app.searchTerm.trim().toLowerCase();
   const visibleSongs = app.songs.filter((song) => {
     if (!filter) return true;
-    return [song.title, song.artist, song.summary, song.description]
+    return [song.title, song.artist, song.summary, song.description, song.ownerDisplayName]
       .join(" ")
       .toLowerCase()
       .includes(filter);
@@ -641,7 +799,10 @@ function renderLobby() {
   if (!visibleSongs.length) {
     const empty = document.createElement("div");
     empty.className = "songCard";
-    empty.innerHTML = "<h3>No songs found</h3><p class='muted'>Try a different search, or create a new sync if you are logged in.</p>";
+    empty.innerHTML = `<h3>No songs found</h3><p class="muted">${canCreateSongs()
+      ? "Try a different search, or start a fresh sync in your workspace."
+      : "Try a different search, or log in if you want to create your own sync."
+    }</p>`;
     dom.lobbyGrid.appendChild(empty);
     return;
   }
@@ -649,36 +810,60 @@ function renderLobby() {
   for (const song of visibleSongs) {
     const card = document.createElement("article");
     card.className = "songCard";
-    card.innerHTML = `
-      <div>
-        <p class="eyebrow">${escapeHtml(song.artist)}</p>
-        <h3>${escapeHtml(song.title)}</h3>
-      </div>
-      <p class="muted">${escapeHtml(song.summary || "Practice sync ready for the dual-player workspace.")}</p>
-      <div class="songMetaRow">
-        <span class="pill">${song.markerCount} labels</span>
-        <span class="pill">${song.sectionCount} sections</span>
-        <span class="pill">${song.ownerDisplayName || "sync.tvguitar.com"}</span>
-      </div>
+    const media = document.createElement("div");
+    media.className = "songCardMedia";
+    media.append(
+      createSongThumb("Official video", getYouTubeThumbnail(song.officialClipUrl), song.title),
+      createSongThumb("Tutorial", getYouTubeThumbnail(song.tutorialUrl), song.title)
+    );
+
+    const cardBadge = document.createElement("span");
+    cardBadge.className = "songCardBadge";
+    cardBadge.textContent = song.canEdit ? "Editable by you" : "Practice ready";
+    media.appendChild(cardBadge);
+
+    const copy = document.createElement("div");
+    copy.innerHTML = `
+      <p class="eyebrow">${escapeHtml(song.artist)}</p>
+      <h3>${escapeHtml(song.title)}</h3>
+    `;
+
+    const creator = document.createElement("p");
+    creator.className = "songCreator";
+    creator.textContent = `Created by ${song.ownerDisplayName || "sync.tvguitar.com"}`;
+
+    const summary = document.createElement("p");
+    summary.className = "muted";
+    summary.textContent = song.summary || "Practice sync ready for the dual-player workspace.";
+
+    const meta = document.createElement("div");
+    meta.className = "songMetaRow";
+    meta.innerHTML = `
+      <span class="pill">${song.markerCount} labels</span>
+      <span class="pill">${song.sectionCount} sections</span>
+      <span class="pill">${song.canEdit ? "Workspace access" : "Practice only"}</span>
     `;
 
     const actions = document.createElement("div");
     actions.className = "songCardActions";
 
-    const openBtn = document.createElement("button");
-    openBtn.className = "primary";
-    openBtn.type = "button";
-    openBtn.textContent = "Open song";
-    openBtn.addEventListener("click", () => loadSong(song.id));
+    const practiceBtn = document.createElement("button");
+    practiceBtn.className = "primary";
+    practiceBtn.type = "button";
+    practiceBtn.textContent = "Practice now";
+    practiceBtn.addEventListener("click", () => practiceSong(song.id));
 
-    actions.appendChild(openBtn);
+    actions.appendChild(practiceBtn);
     if (song.canEdit) {
-      const editNote = document.createElement("span");
-      editNote.className = "pill";
-      editNote.textContent = "You can edit this";
-      actions.appendChild(editNote);
+      const editBtn = document.createElement("button");
+      editBtn.className = "secondary";
+      editBtn.type = "button";
+      editBtn.textContent = "Edit workspace";
+      editBtn.addEventListener("click", () => openSongWorkspace(song.id));
+      actions.appendChild(editBtn);
     }
-    card.appendChild(actions);
+
+    card.append(media, copy, creator, summary, meta, actions);
     dom.lobbyGrid.appendChild(card);
   }
 }
@@ -710,6 +895,7 @@ function applySongToForm(song) {
   renderPracticeHelper();
   renderShortcutsModal();
   renderEditorHeader(song);
+  renderShell();
   readOffsets();
   metronome.setBpm(ensureNumber(dom.metronomeBpm.value, 92));
   metronome.setBeatsPerBar(ensureNumber(dom.metronomeBeatsPerBar.value, 4));
@@ -718,28 +904,28 @@ function applySongToForm(song) {
 function renderEditorHeader(song = null) {
   if (song) {
     dom.workspaceTitle.textContent = `${song.artist || "Artist"} — ${song.title || "Untitled song"}`;
-    const canEdit = Boolean(song.canEdit && app.session?.user);
-    dom.editorModeBadge.textContent = canEdit ? "Owner workspace" : "Practice workspace";
+    const canEdit = canEditCurrentSong();
+    dom.editorModeBadge.textContent = canEdit ? "Owner workspace" : "Practice only";
     if (canEdit) {
-      setEditorStatus("You can update this published song directly.");
+      setEditorStatus("This is your song. Tweak the sync here, then save when it feels right.");
       dom.saveSongBtn.disabled = false;
       dom.saveSongBtn.textContent = "Save changes";
     } else {
-      setEditorStatus("You can practice this song. Save is enabled only for songs you own or new songs you publish.");
-      dom.saveSongBtn.disabled = !app.session?.user;
-      dom.saveSongBtn.textContent = "Publish your own version";
+      setEditorStatus("This song opens in practice mode for everyone else. Only its creator can edit the workspace.");
+      dom.saveSongBtn.disabled = true;
+      dom.saveSongBtn.textContent = "Owner only";
     }
     return;
   }
 
-  dom.workspaceTitle.textContent = app.session?.user
+  dom.workspaceTitle.textContent = canCreateSongs()
     ? "New song draft"
-    : "Guest practice draft";
-  dom.editorModeBadge.textContent = app.session?.user ? "Draft workspace" : "Guest workspace";
-  setEditorStatus(app.session?.user
-    ? "Build a new sync song, load the players, and publish when it feels right."
-    : "You can practice and prepare locally. Log in to publish or edit your songs.");
-  dom.saveSongBtn.disabled = !app.session?.user;
+    : "Log in to create songs";
+  dom.editorModeBadge.textContent = canCreateSongs() ? "Draft workspace" : "Lobby only";
+  setEditorStatus(canCreateSongs()
+    ? "Build a new sync song here, then load the videos and publish when it feels right."
+    : "Guests can browse and practice public songs from the lobby. Log in to add or edit songs.");
+  dom.saveSongBtn.disabled = !canCreateSongs();
   dom.saveSongBtn.textContent = "Publish song";
 }
 
@@ -775,10 +961,10 @@ function renderMySongs() {
     actions.className = "markerActions";
     const openBtn = document.createElement("button");
     openBtn.type = "button";
-    openBtn.textContent = "Open";
+    openBtn.textContent = "Workspace";
     openBtn.addEventListener("click", () => {
       closeModal(dom.profileModal);
-      loadSong(song.id);
+      openSongWorkspace(song.id);
     });
     actions.appendChild(openBtn);
     row.appendChild(actions);
@@ -1031,7 +1217,7 @@ function setActiveLyricByTime(timeSec) {
   const current = dom.lyricsBox.querySelector(`.line[data-idx="${answer}"]`);
   if (current) {
     current.classList.add("active");
-    if (!document.body.classList.contains("practice-mode")) {
+    if (app.screen !== "practice") {
       current.scrollIntoView({ block: "center", behavior: "smooth" });
     }
   }
@@ -1084,6 +1270,10 @@ async function saveCurrentSong() {
     openAuthModal("login");
     return;
   }
+  if (app.currentSongId && !app.currentSongCanEdit) {
+    showToast("Only the creator can edit this song. Start a new draft to build your own sync.", "danger");
+    return;
+  }
 
   const payload = collectSongPayload();
   const wasEditing = Boolean(app.currentSongId && app.currentSongCanEdit);
@@ -1095,7 +1285,8 @@ async function saveCurrentSong() {
     await Promise.all([loadLobbySongs(), loadMySongs()]);
     renderProfile();
     renderMySongs();
-    showToast(wasEditing ? "Song changes saved." : "Song published to the lobby.");
+    setScreen("workspace");
+    showToast(wasEditing ? "Song changes saved." : "Song published to the lobby.", "success");
   } catch (error) {
     showToast(error.message, "danger");
   }
@@ -1131,14 +1322,23 @@ async function loadSong(songId, options = {}) {
   try {
     const song = await apiFetch(`/api/songs/${songId}`, { method: "GET" });
     applySongToForm(song);
-    document.querySelector("#workspaceSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    if (!options.silent) showToast(`Loaded ${song.artist} — ${song.title}.`);
+    if (!options.silent) showToast(`Loaded ${song.artist} — ${song.title}.`, "success");
+    return song;
   } catch (error) {
     if (!options.silent) showToast(error.message, "danger");
+    return null;
   }
 }
 
-function createNewDraft() {
+function createNewDraft(skipAuthCheck = false, options = {}) {
+  if (!skipAuthCheck && !canCreateSongs()) {
+    showToast("Log in to add songs or edit your own workspace.", "danger");
+    openAuthModal("login");
+    return;
+  }
+
+  resetPlayers();
+  clearLoop();
   app.currentSongId = "";
   app.currentSongCanEdit = false;
   app.currentSongOwner = "";
@@ -1176,6 +1376,42 @@ function createNewDraft() {
   renderMarkersList();
   renderSectionsList();
   renderEditorHeader();
+  setScreen(options.screen || "workspace");
+  renderShell();
+  if (!options.quiet) showToast("Workspace ready for a new song.", "success");
+}
+
+async function openSongWorkspace(songId) {
+  const song = await loadSong(songId, { silent: true });
+  if (!song) return;
+  if (!song.canEdit) {
+    showToast("Only the creator can open this song in the workspace.", "danger");
+    return;
+  }
+
+  setScreen("workspace");
+  const started = await loadPlayers({
+    readyToast: `Videos ready for ${song.artist} — ${song.title}.`
+  });
+  if (started) showToast(`Workspace opened for ${song.artist} — ${song.title}.`, "success");
+}
+
+async function practiceSong(songId) {
+  app.returnScreen = app.screen === "workspace" ? "workspace" : "lobby";
+  dom.practiceSongTitle.textContent = "Loading practice…";
+  dom.practiceSongMeta.textContent = "Fetching the song and lining up both videos.";
+  setScreen("practice", { requestFullscreen: true, returnScreen: app.returnScreen });
+
+  const song = await loadSong(songId, { silent: true });
+  if (!song) {
+    setScreen("lobby");
+    return;
+  }
+
+  const started = await loadPlayers({
+    readyToast: `Videos ready for ${song.artist} — ${song.title}. Press play when you are ready.`
+  });
+  if (started) showToast(`Opening practice for ${song.artist} — ${song.title}.`, "info");
 }
 
 function collectDraftState() {
@@ -1200,6 +1436,8 @@ function restoreDraft() {
   if (!raw) return;
   try {
     const draft = JSON.parse(raw);
+    app.currentSongId = draft.currentSongId || "";
+    app.currentSongCanEdit = false;
     if (draft.settings) applySettings(draft.settings, true);
     if (draft.song) {
       dom.songTitle.value = draft.song.title || "";
@@ -1224,6 +1462,13 @@ function restoreDraft() {
       renderPracticeHelper();
       renderShortcutsModal();
     }
+    renderEditorHeader(app.currentSongId ? {
+      id: app.currentSongId,
+      title: dom.songTitle.value,
+      artist: dom.songArtist.value,
+      canEdit: false
+    } : null);
+    renderShell();
   } catch {
     // Ignore bad drafts.
   }
@@ -1266,17 +1511,27 @@ async function handleAuthSubmit(event) {
     if (app.authMode === "signup") {
       const result = await app.supabase.auth.signUp({ email, password });
       if (result.error) throw result.error;
-      dom.authStatus.textContent = "Sign-up request sent. If email confirmation is enabled, check your inbox.";
-      showToast("Account created. You can log in as soon as Supabase approves the session.");
+      const needsConfirmation = !result.data?.session;
+      dom.authStatus.textContent = needsConfirmation
+        ? "Check your inbox to confirm your email, then come back and log in."
+        : "Account created. You are logged in.";
+      showToast(
+        needsConfirmation
+          ? "Confirmation email sent. Finish verification, then log in."
+          : "Account created.",
+        "success"
+      );
+      if (!needsConfirmation) closeModal(dom.authModal);
       return;
     }
 
     const result = await app.supabase.auth.signInWithPassword({ email, password });
     if (result.error) throw result.error;
     closeModal(dom.authModal);
-    showToast("Logged in.");
+    showToast("Logged in.", "success");
   } catch (error) {
     dom.authStatus.textContent = error.message || "Authentication failed.";
+    showToast(error.message || "Authentication failed.", "danger");
   }
 }
 
@@ -1302,7 +1557,7 @@ async function handleSessionChanged(session) {
   }
   await Promise.all([loadLobbySongs(), loadMySongs()]);
   if (app.currentSongId) {
-    loadSong(app.currentSongId, { silent: true }).catch(() => {});
+    await loadSong(app.currentSongId, { silent: true });
   }
   renderPracticeHelper();
   renderShortcutsModal();
@@ -1312,6 +1567,11 @@ async function handleSessionChanged(session) {
     artist: dom.songArtist.value,
     canEdit: app.currentSongCanEdit
   } : null);
+  if (app.screen === "workspace" && !canAccessWorkspace()) {
+    setScreen("lobby");
+    return;
+  }
+  renderShell();
 }
 
 async function saveProfileSettings() {
@@ -1322,6 +1582,7 @@ async function saveProfileSettings() {
     renderPracticeHelper();
     renderShortcutsModal();
     scheduleAutosave();
+    showToast("Practice defaults saved locally.", "success");
     return;
   }
   try {
@@ -1336,8 +1597,10 @@ async function saveProfileSettings() {
     renderProfile();
     renderPracticeHelper();
     renderShortcutsModal();
+    showToast("Profile defaults saved.", "success");
   } catch (error) {
     setShortcutStatus(error.message);
+    showToast(error.message, "danger");
   }
 }
 
@@ -1346,6 +1609,7 @@ function resetSettings() {
   setShortcutStatus("Defaults restored.");
   renderPracticeHelper();
   renderShortcutsModal();
+  showToast("Keyboard and practice defaults restored.", "success");
 }
 
 function exportCurrentSong() {
@@ -1481,8 +1745,11 @@ function renderLoopStatus() {
 
 function startPlaybackNow() {
   if (!canSync()) return;
-  if (app.settings.autoEnterPracticeOnPlay && !document.body.classList.contains("practice-mode")) {
-    togglePracticeMode(true);
+  if (app.settings.autoEnterPracticeOnPlay && app.screen !== "practice") {
+    setScreen("practice", {
+      requestFullscreen: true,
+      returnScreen: canAccessWorkspace() ? "workspace" : "lobby"
+    });
   }
   lastPlayRequestAt = Date.now();
   const master = userScrubbing ? ensureNumber(dom.scrubber.value, 0) : getMasterTime();
@@ -1691,20 +1958,24 @@ function setSectionEndFromCurrent() {
 function togglePracticeMode(force) {
   const next = typeof force === "boolean"
     ? force
-    : !document.body.classList.contains("practice-mode");
-  document.body.classList.toggle("practice-mode", next);
-  dom.practiceModeBtn.textContent = next ? "Exit practice" : "Fullscreen practice";
-  if (next && document.documentElement.requestFullscreen && !document.fullscreenElement) {
-    document.documentElement.requestFullscreen().catch(() => {});
-  } else if (!next && document.exitFullscreen && document.fullscreenElement) {
-    document.exitFullscreen().catch(() => {});
+    : app.screen !== "practice";
+  if (next) {
+    if (!hasPracticeCandidate()) {
+      showToast("Pick a song or load both videos first.", "danger");
+      return;
+    }
+    setScreen("practice", {
+      requestFullscreen: true,
+      returnScreen: canAccessWorkspace() ? "workspace" : "lobby"
+    });
+    return;
   }
+  setScreen(app.returnScreen === "workspace" && canAccessWorkspace() ? "workspace" : "lobby");
 }
 
 function onFullscreenChange() {
-  if (!document.fullscreenElement && document.body.classList.contains("practice-mode")) {
-    document.body.classList.remove("practice-mode");
-    dom.practiceModeBtn.textContent = "Fullscreen practice";
+  if (!document.fullscreenElement && app.screen === "practice") {
+    setScreen(app.returnScreen === "workspace" && canAccessWorkspace() ? "workspace" : "lobby");
   }
 }
 
@@ -1782,13 +2053,14 @@ function ensureYTApi() {
   return ytApiPromise;
 }
 
-async function loadPlayers() {
+async function loadPlayers(options = {}) {
+  const readyToast = String(options.readyToast || "").trim();
   readOffsets();
   const songIssue = getYouTubeInputIssue("Official clip", dom.songUrl.value);
   const pianoIssue = getYouTubeInputIssue("Tutorial", dom.pianoUrl.value);
   if (songIssue || pianoIssue) {
     showToast([songIssue, pianoIssue].filter(Boolean).join(" "), "danger");
-    return;
+    return false;
   }
   await ensureYTApi();
 
@@ -1823,6 +2095,7 @@ async function loadPlayers() {
       setCalibrateStatus("Players loaded. Calibrate if the frames do not match musically.");
       setPlayerStatus("song", "ready");
       setPlayerStatus("piano", "ready");
+      if (readyToast) showToast(readyToast, "success");
     }, 200);
   };
 
@@ -1858,6 +2131,7 @@ async function loadPlayers() {
       onError: () => setPlayerStatus("song", "error", "Load error")
     }
   });
+  return true;
 }
 
 function resyncNow() {
@@ -1898,8 +2172,8 @@ async function deleteAccount() {
     await app.supabase.auth.signOut();
     dom.deleteAccountStatus.textContent = "Account deleted.";
     closeModal(dom.profileModal);
-    createNewDraft();
-    showToast("Account deletion completed.");
+    createNewDraft(true, { quiet: true, screen: "lobby" });
+    showToast("Account deletion completed.", "success");
   } catch (error) {
     dom.deleteAccountStatus.textContent = error.message;
   }
@@ -1939,15 +2213,21 @@ function bindEvents() {
     if (app.session?.user) saveProfileSettings();
   });
 
+  dom.navLobbyBtn.addEventListener("click", () => setScreen("lobby"));
+  dom.navWorkspaceBtn.addEventListener("click", () => setScreen("workspace"));
   dom.loginBtn.addEventListener("click", () => openAuthModal("login"));
   dom.signupBtn.addEventListener("click", () => openAuthModal("signup"));
   dom.heroCreateSongBtn.addEventListener("click", createNewDraft);
   dom.createSongBtn.addEventListener("click", createNewDraft);
   dom.newDraftBtn.addEventListener("click", createNewDraft);
+  dom.practiceBackBtn.addEventListener("click", () => {
+    setScreen(app.returnScreen === "workspace" && canAccessWorkspace() ? "workspace" : "lobby");
+  });
+  dom.practiceWorkspaceBtn.addEventListener("click", () => setScreen("workspace"));
   dom.profileBtn.addEventListener("click", openProfileModal);
   dom.logoutBtn.addEventListener("click", async () => {
     await app.supabase.auth.signOut();
-    showToast("Logged out.");
+    showToast("Logged out.", "success");
   });
 
   dom.authTabLogin.addEventListener("click", () => openAuthModal("login"));
@@ -1972,7 +2252,9 @@ function bindEvents() {
     renderLobby();
   });
 
-  dom.loadBtn.addEventListener("click", loadPlayers);
+  dom.loadBtn.addEventListener("click", () => {
+    loadPlayers({ readyToast: "Videos ready. Press play when you are ready." });
+  });
   dom.saveSongBtn.addEventListener("click", saveCurrentSong);
   dom.calibrateBtn.addEventListener("click", calibrateUsingCurrentFrame);
   dom.usePastedBtn.addEventListener("click", usePastedLyrics);
@@ -1990,6 +2272,7 @@ function bindEvents() {
   dom.playBtn.addEventListener("click", togglePlayPause);
   dom.restartBtn.addEventListener("click", restart);
   dom.mutePianoBtn.addEventListener("click", toggleMutePiano);
+  dom.lyricsFocusBtn.addEventListener("click", () => document.body.classList.toggle("lyrics-focus"));
   dom.toggleLoopBtn.addEventListener("click", toggleLoopEnabled);
   dom.setLoopABtn.addEventListener("click", () => setLoopPoint("a"));
   dom.setLoopBBtn.addEventListener("click", () => setLoopPoint("b"));
@@ -2041,6 +2324,10 @@ function handleKeydown(event) {
     closeModal(dom.shortcutsModal);
     closeModal(dom.authModal);
     closeModal(dom.profileModal);
+    if (app.screen === "practice") {
+      setScreen(app.returnScreen === "workspace" && canAccessWorkspace() ? "workspace" : "lobby");
+      return;
+    }
   }
   if (typing) return;
 
@@ -2127,6 +2414,7 @@ async function init() {
   renderShortcutsModal();
   setMetronomeButtonLabel();
   renderEditorHeader();
+  renderShell();
 }
 
 init();

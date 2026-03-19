@@ -83,21 +83,24 @@ func (s *Store) SaveUserProfile(ctx context.Context, identity SupabaseIdentity, 
 func (s *Store) ListPublicSongs(ctx context.Context, viewerID string) ([]SongCard, error) {
 	rows, err := s.pool.Query(ctx, `
 		select
-			id,
-			slug,
-			title,
-			artist,
-			summary,
-			description,
-			owner_display_name,
-			coalesce(jsonb_array_length(markers), 0),
-			coalesce(jsonb_array_length(sections), 0),
-			published,
-			updated_at,
-			owner_user_id
+			songs.id,
+			songs.slug,
+			songs.title,
+			songs.artist,
+			songs.summary,
+			songs.description,
+			coalesce(nullif(user_profiles.display_name, ''), nullif(songs.owner_display_name, ''), 'Creator'),
+			songs.official_clip_url,
+			songs.tutorial_url,
+			coalesce(jsonb_array_length(songs.markers), 0),
+			coalesce(jsonb_array_length(songs.sections), 0),
+			songs.published,
+			songs.updated_at,
+			songs.owner_user_id
 		from songs
-		where published = true
-		order by updated_at desc, title asc
+		left join user_profiles on user_profiles.user_id = songs.owner_user_id and user_profiles.deleted_at is null
+		where songs.published = true
+		order by songs.updated_at desc, songs.title asc
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("list public songs: %w", err)
@@ -121,21 +124,24 @@ func (s *Store) ListPublicSongs(ctx context.Context, viewerID string) ([]SongCar
 func (s *Store) ListUserSongs(ctx context.Context, userID string) ([]SongCard, error) {
 	rows, err := s.pool.Query(ctx, `
 		select
-			id,
-			slug,
-			title,
-			artist,
-			summary,
-			description,
-			owner_display_name,
-			coalesce(jsonb_array_length(markers), 0),
-			coalesce(jsonb_array_length(sections), 0),
-			published,
-			updated_at,
-			owner_user_id
+			songs.id,
+			songs.slug,
+			songs.title,
+			songs.artist,
+			songs.summary,
+			songs.description,
+			coalesce(nullif(user_profiles.display_name, ''), nullif(songs.owner_display_name, ''), 'Creator'),
+			songs.official_clip_url,
+			songs.tutorial_url,
+			coalesce(jsonb_array_length(songs.markers), 0),
+			coalesce(jsonb_array_length(songs.sections), 0),
+			songs.published,
+			songs.updated_at,
+			songs.owner_user_id
 		from songs
-		where owner_user_id = $1
-		order by updated_at desc, title asc
+		left join user_profiles on user_profiles.user_id = songs.owner_user_id and user_profiles.deleted_at is null
+		where songs.owner_user_id = $1
+		order by songs.updated_at desc, songs.title asc
 	`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list user songs: %w", err)
@@ -159,31 +165,32 @@ func (s *Store) ListUserSongs(ctx context.Context, userID string) ([]SongCard, e
 func (s *Store) GetSong(ctx context.Context, songID string, viewerID string) (Song, error) {
 	row := s.pool.QueryRow(ctx, `
 		select
-			id,
-			slug,
-			title,
-			artist,
-			summary,
-			description,
-			owner_user_id,
-			owner_display_name,
-			official_clip_url,
-			tutorial_url,
-			song_start_sec,
-			tutorial_start_sec,
-			countdown_sec,
-			metronome_bpm,
-			metronome_beats_per_bar,
-			loop_repeat_target,
-			lyrics,
-			markers,
-			sections,
-			published,
-			created_at,
-			updated_at
+			songs.id,
+			songs.slug,
+			songs.title,
+			songs.artist,
+			songs.summary,
+			songs.description,
+			songs.owner_user_id,
+			coalesce(nullif(user_profiles.display_name, ''), nullif(songs.owner_display_name, ''), 'Creator'),
+			songs.official_clip_url,
+			songs.tutorial_url,
+			songs.song_start_sec,
+			songs.tutorial_start_sec,
+			songs.countdown_sec,
+			songs.metronome_bpm,
+			songs.metronome_beats_per_bar,
+			songs.loop_repeat_target,
+			songs.lyrics,
+			songs.markers,
+			songs.sections,
+			songs.published,
+			songs.created_at,
+			songs.updated_at
 		from songs
-		where id = $1
-		  and (published = true or owner_user_id = $2)
+		left join user_profiles on user_profiles.user_id = songs.owner_user_id and user_profiles.deleted_at is null
+		where songs.id = $1
+		  and (songs.published = true or songs.owner_user_id = $2)
 	`, songID, viewerID)
 
 	song, err := scanSongRow(row, viewerID)
@@ -287,6 +294,11 @@ func (s *Store) InsertSeedSong(ctx context.Context, slug string, payload SongPay
 		return err
 	}
 
+	var ownerUserID any
+	if strings.TrimSpace(devSeedOwnerUserID) != "" {
+		ownerUserID = devSeedOwnerUserID
+	}
+
 	_, err = s.pool.Exec(ctx, `
 		insert into songs (
 			slug,
@@ -294,6 +306,7 @@ func (s *Store) InsertSeedSong(ctx context.Context, slug string, payload SongPay
 			artist,
 			summary,
 			description,
+			owner_user_id,
 			owner_display_name,
 			official_clip_url,
 			tutorial_url,
@@ -311,7 +324,7 @@ func (s *Store) InsertSeedSong(ctx context.Context, slug string, payload SongPay
 		values (
 			$1, $2, $3, $4, $5, $6, $7, $8,
 			$9, $10, $11, $12, $13, $14, $15,
-			$16::jsonb, $17::jsonb, $18
+			$16, $17::jsonb, $18::jsonb, $19
 		)
 		on conflict (slug) do nothing
 	`, slug,
@@ -319,6 +332,7 @@ func (s *Store) InsertSeedSong(ctx context.Context, slug string, payload SongPay
 		normalized.Artist,
 		normalized.Summary,
 		normalized.Description,
+		ownerUserID,
 		ownerDisplayName,
 		normalized.OfficialClipURL,
 		normalized.TutorialURL,
@@ -345,7 +359,7 @@ func (s *Store) UpdateSong(ctx context.Context, identity SupabaseIdentity, songI
 		return Song{}, err
 	}
 
-	var existingOwner string
+	var existingOwner *string
 	var existingSlug string
 	err = s.pool.QueryRow(ctx, `select owner_user_id, slug from songs where id = $1`, songID).Scan(&existingOwner, &existingSlug)
 	if err != nil {
@@ -354,7 +368,7 @@ func (s *Store) UpdateSong(ctx context.Context, identity SupabaseIdentity, songI
 		}
 		return Song{}, fmt.Errorf("load song owner: %w", err)
 	}
-	if existingOwner != identity.ID {
+	if existingOwner == nil || *existingOwner != identity.ID {
 		return Song{}, errForbidden
 	}
 
@@ -497,6 +511,8 @@ func scanSongCard(row pgx.Row, viewerID string) (SongCard, error) {
 		&card.Summary,
 		&card.Description,
 		&card.OwnerDisplayName,
+		&card.OfficialClipURL,
+		&card.TutorialURL,
 		&card.MarkerCount,
 		&card.SectionCount,
 		&card.Published,

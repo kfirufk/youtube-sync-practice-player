@@ -31,6 +31,8 @@ type legacyMarkerSeed struct {
 	TimeSec float64 `json:"timeSec"`
 }
 
+const devSeedOwnerUserID = "b38f9272-ed74-4fd5-ac7f-aa0ca47427aa"
+
 func BootstrapLegacySeeds(ctx context.Context, store *Store, rootDir string) error {
 	var exists bool
 	if err := store.pool.QueryRow(ctx, `select exists(select 1 from songs where slug = $1)`, "rihanna-stay-practice").Scan(&exists); err != nil {

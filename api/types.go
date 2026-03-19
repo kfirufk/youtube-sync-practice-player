@@ -115,6 +115,8 @@ type SongCard struct {
 	Summary          string    `json:"summary"`
 	Description      string    `json:"description"`
 	OwnerDisplayName string    `json:"ownerDisplayName"`
+	OfficialClipURL  string    `json:"officialClipUrl"`
+	TutorialURL      string    `json:"tutorialUrl"`
 	MarkerCount      int       `json:"markerCount"`
 	SectionCount     int       `json:"sectionCount"`
 	Published        bool      `json:"published"`

@@ -18,15 +18,18 @@
   </a>
 
   <nav class="headerNav">
-    <a href="#lobbySection">Songs</a>
-    <a href="#workspaceSection">Workspace</a>
+    <button id="navLobbyBtn" class="navLink active" type="button">Songs</button>
+    <button id="navWorkspaceBtn" class="navLink hidden" type="button">Workspace</button>
     <a href="/privacy.html">Privacy</a>
   </nav>
 
   <div class="headerActions">
     <span id="authIndicator" class="authIndicator" data-state="guest">Guest</span>
     <button id="themeBtn" class="modeBtn" type="button" title="Theme mode">Theme: Auto</button>
-    <button id="openShortcutsBtn" class="secondary" type="button">Shortcuts</button>
+    <button id="openShortcutsBtn" class="secondary iconLabel" type="button" aria-label="Keyboard shortcuts">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Zm3-1a1 1 0 0 0-1 1v2h12V7a1 1 0 0 0-1-1Zm11 5H6v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1ZM8 13h2v2H8Zm3 0h2v2h-2Zm3 0h2v2h-2ZM8 16h5v2H8Z"></path></svg>
+      <span>Keyboard</span>
+    </button>
     <button id="loginBtn" class="secondary" type="button">Log in</button>
     <button id="signupBtn" class="primary" type="button">Sign up</button>
     <button id="profileBtn" class="secondary hidden" type="button">Profile</button>
@@ -37,26 +40,37 @@
 <main class="page">
   <section class="heroPanel">
     <div class="heroCopy">
-      <p class="eyebrow">Dual-video practice without losing your place</p>
-      <h1>Practice with the tutorial, the official clip, and your own jump labels on one timeline.</h1>
+      <p class="eyebrow">Pick a song. Go fullscreen. Have fun.</p>
+      <h1>Start from a clean lobby, jump straight into practice, and only open the workspace when you actually want to edit.</h1>
       <p class="heroText">
-        Browse public sync songs from the lobby, jump into fullscreen practice automatically when you hit play,
-        and keep your shortcut legend visible next to the lyrics so you never have to guess mid-session.
+        Every public song now shows the official video and tutorial side by side before you enter.
+        Choose a song, land in focused practice first, and keep the editing tools reserved for the creator.
       </p>
       <div class="heroActions">
-        <a class="primary heroLink" href="#lobbySection">Browse songs</a>
+        <a class="primary heroLink buttonLike" href="#lobbySection">Browse songs</a>
         <button id="heroCreateSongBtn" class="secondary" type="button">Create a new sync</button>
       </div>
     </div>
 
-    <div class="heroInfo card">
-      <p class="heroCardEyebrow">What’s new</p>
-      <ul class="heroChecklist">
-        <li>PostgreSQL-backed song data served by Go</li>
-        <li>Supabase email/password login with live auth status</li>
-        <li>Fullscreen practice helper with jump-key legend</li>
-        <li>Profile-synced defaults for shortcuts and practice settings</li>
-      </ul>
+    <div class="heroInfo card heroStage">
+      <p class="heroCardEyebrow">Fast lane</p>
+      <div class="heroSequence">
+        <article class="heroStep">
+          <span>01</span>
+          <strong>Browse the lobby</strong>
+          <p>Preview both YouTube videos and pick something that feels fun right now.</p>
+        </article>
+        <article class="heroStep">
+          <span>02</span>
+          <strong>Practice first</strong>
+          <p>Open a song into focused fullscreen practice instead of dropping into a wall of controls.</p>
+        </article>
+        <article class="heroStep">
+          <span>03</span>
+          <strong>Edit only when needed</strong>
+          <p>Creators can hop into the workspace, while everyone else stays in a clean play-and-practice flow.</p>
+        </article>
+      </div>
       <p id="bootstrapStatus" class="small muted">Loading app configuration…</p>
     </div>
   </section>
@@ -65,11 +79,11 @@
     <div class="sectionHeader">
       <div>
         <p class="eyebrow">Lobby</p>
-        <h2>Public sync songs</h2>
-        <p class="muted">Guests can browse and practice. Logged-in users can publish new songs and update the ones they own.</p>
+        <h2>Pick a song and start playing</h2>
+        <p class="muted">Everyone can practice. Only logged-in creators can add songs or open their own workspace to edit them.</p>
       </div>
       <div class="sectionActions">
-        <input id="songSearch" type="search" placeholder="Search title, artist, or summary" />
+        <input id="songSearch" type="search" placeholder="Search title, artist, creator, or summary" />
         <button id="createSongBtn" class="primary" type="button">New song</button>
       </div>
     </div>
@@ -77,11 +91,23 @@
   </section>
 
   <section id="workspaceSection" class="panelSection workspaceSection">
+    <div id="practiceContextBar" class="practiceContextBar hidden">
+      <div>
+        <p class="eyebrow">Practice</p>
+        <h2 id="practiceSongTitle">Pick a song to start practicing</h2>
+        <p id="practiceSongMeta" class="muted">The focused practice view keeps the heavy editor out of sight until you need it.</p>
+      </div>
+      <div class="practiceContextActions">
+        <button id="practiceBackBtn" class="secondary" type="button">Back to songs</button>
+        <button id="practiceWorkspaceBtn" class="primary hidden" type="button">Open workspace</button>
+      </div>
+    </div>
+
     <div class="workspaceHeader">
       <div>
         <p id="editorModeBadge" class="eyebrow">Workspace</p>
-        <h2 id="workspaceTitle">Select a song or start a new draft</h2>
-        <p id="editorStatus" class="muted">The editor is ready for DB-backed songs, profile defaults, and fullscreen practice.</p>
+        <h2 id="workspaceTitle">Start a new song draft</h2>
+        <p id="editorStatus" class="muted">The workspace is only for logged-in creators and the songs they own.</p>
       </div>
       <div class="workspaceActions">
         <button id="loadBtn" class="primary" type="button">Load &amp; Sync</button>
@@ -390,7 +416,7 @@
               <h3>Lyrics &amp; shortcut helper</h3>
             </div>
             <div class="row">
-              <button id="practiceModeBtn" class="secondary" type="button">Fullscreen practice</button>
+              <button id="practiceModeBtn" class="secondary" type="button">Open fullscreen practice</button>
               <button id="togglePracticeHelperBtn" class="secondary" type="button">Hide helper</button>
             </div>
           </div>

@@ -328,6 +328,16 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request, ide
 		return
 	}
 
+	var payload DeleteAccountRequest
+	if err := decodeJSONBody(r, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if strings.TrimSpace(payload.Confirmation) != "DELETE MY ACCOUNT" {
+		writeError(w, http.StatusBadRequest, "confirmation text must be DELETE MY ACCOUNT")
+		return
+	}
+
 	if s.cfg.Supabase.ServiceRoleKey == "" {
 		writeError(w, http.StatusNotImplemented, "self-serve account deletion needs supabase.service_role_key in api/config.yaml")
 		return

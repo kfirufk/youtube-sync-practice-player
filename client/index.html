@@ -526,7 +526,19 @@
         <p class="small muted">
           Published songs may remain visible after account deletion or closure. This should be stated clearly in the legal pages.
         </p>
-        <button id="deleteAccountBtn" class="danger" type="button">Delete account</button>
+        <label class="dangerConfirmLabel" for="deleteAccountConfirmInput">
+          Type <strong>DELETE MY ACCOUNT</strong> to enable deletion
+        </label>
+        <input
+          id="deleteAccountConfirmInput"
+          class="dangerConfirmInput"
+          type="text"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          placeholder="DELETE MY ACCOUNT"
+        >
+        <button id="deleteAccountBtn" class="danger" type="button">Delete account permanently</button>
         <p id="deleteAccountStatus" class="small muted"></p>
       </div>
     </div>

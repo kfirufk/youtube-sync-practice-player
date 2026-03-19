@@ -32,6 +32,8 @@ const STORAGE_KEYS = {
   cookies: "sync-player-cookie-consent"
 };
 
+const DELETE_ACCOUNT_CONFIRMATION = "DELETE MY ACCOUNT";
+
 const dom = {
   bootstrapStatus: el("bootstrapStatus"),
   navLobbyBtn: el("navLobbyBtn"),
@@ -154,6 +156,7 @@ const dom = {
   profileNameText: el("profileNameText"),
   profileEmailText: el("profileEmailText"),
   mySongsList: el("mySongsList"),
+  deleteAccountConfirmInput: el("deleteAccountConfirmInput"),
   deleteAccountBtn: el("deleteAccountBtn"),
   deleteAccountStatus: el("deleteAccountStatus"),
   cookieBanner: el("cookieBanner"),
@@ -950,10 +953,15 @@ function renderEditorHeader(song = null) {
 function renderProfile() {
   dom.profileNameText.textContent = app.profile?.displayName || app.session?.user?.email || "Guest";
   dom.profileEmailText.textContent = app.profile?.email || "";
-  dom.deleteAccountBtn.disabled = !app.profile?.deletionEnabled;
-  dom.deleteAccountStatus.textContent = app.profile?.deletionEnabled
-    ? "Deleting your account will remove your local profile data and request Supabase account deletion. Published songs may remain visible."
-    : "Self-serve deletion is disabled until a Supabase service role key is configured on the server.";
+  const confirmationMatches = dom.deleteAccountConfirmInput.value.trim() === DELETE_ACCOUNT_CONFIRMATION;
+  dom.deleteAccountBtn.disabled = !app.profile?.deletionEnabled || !confirmationMatches;
+  if (!app.profile?.deletionEnabled) {
+    dom.deleteAccountStatus.textContent = "Self-serve deletion is disabled until a Supabase service role key is configured on the server.";
+    return;
+  }
+  if (!dom.deleteAccountStatus.textContent) {
+    dom.deleteAccountStatus.textContent = `Deleting your account will remove your local profile data and request Supabase account deletion. Type ${DELETE_ACCOUNT_CONFIRMATION} exactly, then confirm the dialog. Published songs may remain visible.`;
+  }
 }
 
 function renderMySongs() {
@@ -1500,6 +1508,11 @@ function closeModal(node) {
   node.classList.add("hidden");
 }
 
+function resetDeleteAccountForm() {
+  dom.deleteAccountConfirmInput.value = "";
+  dom.deleteAccountStatus.textContent = "";
+}
+
 function openAuthModal(mode) {
   app.authMode = mode;
   const login = mode !== "signup";
@@ -1512,6 +1525,7 @@ function openAuthModal(mode) {
 }
 
 function openProfileModal() {
+  resetDeleteAccountForm();
   renderProfile();
   renderMySongs();
   openModal(dom.profileModal);
@@ -2185,16 +2199,31 @@ function acceptCookies(optionalAllowed) {
 
 async function deleteAccount() {
   if (!app.profile?.deletionEnabled) return;
+  const confirmation = dom.deleteAccountConfirmInput.value.trim();
+  if (confirmation !== DELETE_ACCOUNT_CONFIRMATION) {
+    dom.deleteAccountStatus.textContent = `Type ${DELETE_ACCOUNT_CONFIRMATION} exactly to continue.`;
+    return;
+  }
+  if (!window.confirm("Delete your account permanently? This action cannot be undone.")) {
+    dom.deleteAccountStatus.textContent = "Account deletion cancelled.";
+    return;
+  }
+  dom.deleteAccountBtn.disabled = true;
   dom.deleteAccountStatus.textContent = "Deleting account…";
   try {
-    await apiFetch("/api/me/account/delete", { method: "POST", body: JSON.stringify({}) });
+    await apiFetch("/api/me/account/delete", {
+      method: "POST",
+      body: JSON.stringify({ confirmation })
+    });
+    await handleSessionChanged(null);
     await app.supabase.auth.signOut();
-    dom.deleteAccountStatus.textContent = "Account deleted.";
+    resetDeleteAccountForm();
     closeModal(dom.profileModal);
     createNewDraft(true, { quiet: true, screen: "lobby" });
     showToast("Account deletion completed.", "success");
   } catch (error) {
     dom.deleteAccountStatus.textContent = error.message;
+    renderProfile();
   }
 }
 
@@ -2253,7 +2282,10 @@ function bindEvents() {
   dom.authTabSignup.addEventListener("click", () => openAuthModal("signup"));
   dom.authForm.addEventListener("submit", handleAuthSubmit);
   dom.closeAuthModalBtn.addEventListener("click", () => closeModal(dom.authModal));
-  dom.closeProfileModalBtn.addEventListener("click", () => closeModal(dom.profileModal));
+  dom.closeProfileModalBtn.addEventListener("click", () => {
+    resetDeleteAccountForm();
+    closeModal(dom.profileModal);
+  });
   dom.openShortcutsBtn.addEventListener("click", () => openModal(dom.shortcutsModal));
   dom.closeShortcutsBtn.addEventListener("click", () => closeModal(dom.shortcutsModal));
   dom.shortcutsModal.addEventListener("click", (event) => {
@@ -2263,7 +2295,14 @@ function bindEvents() {
     if (event.target === dom.authModal) closeModal(dom.authModal);
   });
   dom.profileModal.addEventListener("click", (event) => {
-    if (event.target === dom.profileModal) closeModal(dom.profileModal);
+    if (event.target === dom.profileModal) {
+      resetDeleteAccountForm();
+      closeModal(dom.profileModal);
+    }
+  });
+  dom.deleteAccountConfirmInput.addEventListener("input", () => {
+    dom.deleteAccountStatus.textContent = "";
+    renderProfile();
   });
 
   dom.songSearch.addEventListener("input", () => {

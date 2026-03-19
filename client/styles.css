@@ -1014,6 +1014,29 @@ input[type="range"] {
   gap: 10px;
 }
 
+.dangerConfirmLabel {
+  display: block;
+  margin: 10px 0 6px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.dangerConfirmInput {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 11px 13px;
+  border-radius: 14px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: var(--input-bg);
+  color: var(--ink);
+}
+
+.dangerConfirmInput:focus {
+  outline: 2px solid rgba(239, 68, 68, 0.28);
+  outline-offset: 2px;
+  border-color: rgba(239, 68, 68, 0.7);
+}
+
 .cookieBanner {
   position: fixed;
   left: 16px;

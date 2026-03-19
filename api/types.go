@@ -16,10 +16,10 @@ var (
 )
 
 type BootstrapResponse struct {
-	Site             SiteBootstrap   `json:"site"`
-	Supabase         SupabasePublic  `json:"supabase"`
-	Features         FeatureFlags    `json:"features"`
-	DefaultSettings  ProfileSettings `json:"defaultSettings"`
+	Site            SiteBootstrap   `json:"site"`
+	Supabase        SupabasePublic  `json:"supabase"`
+	Features        FeatureFlags    `json:"features"`
+	DefaultSettings ProfileSettings `json:"defaultSettings"`
 }
 
 type SiteBootstrap struct {
@@ -49,17 +49,21 @@ type SupabaseIdentity struct {
 }
 
 type UserProfile struct {
-	UserID            string          `json:"userId"`
-	Email             string          `json:"email"`
-	DisplayName       string          `json:"displayName"`
-	Settings          ProfileSettings `json:"settings"`
-	DeletionEnabled   bool            `json:"deletionEnabled"`
-	DeletedAt         *time.Time      `json:"deletedAt,omitempty"`
+	UserID          string          `json:"userId"`
+	Email           string          `json:"email"`
+	DisplayName     string          `json:"displayName"`
+	Settings        ProfileSettings `json:"settings"`
+	DeletionEnabled bool            `json:"deletionEnabled"`
+	DeletedAt       *time.Time      `json:"deletedAt,omitempty"`
 }
 
 type ProfileUpdateRequest struct {
 	DisplayName string          `json:"displayName"`
 	Settings    ProfileSettings `json:"settings"`
+}
+
+type DeleteAccountRequest struct {
+	Confirmation string `json:"confirmation"`
 }
 
 type ProfileSettings struct {

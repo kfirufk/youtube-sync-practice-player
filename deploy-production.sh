@@ -197,12 +197,11 @@ run_as_root mkdir -p "${CLIENT_TARGET_DIR}"
 run_as_root rsync -av --delete "${CLIENT_DIR}/" "${CLIENT_TARGET_DIR}/"
 
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}"
+echo "Writing ${SERVICE_NAME}..."
+write_service_file
+
 if run_as_root test -f "${SERVICE_PATH}"; then
-  echo "Restarting existing ${SERVICE_NAME}..."
-  run_as_root systemctl restart "${SERVICE_NAME}"
-else
-  echo "Creating ${SERVICE_NAME}..."
-  write_service_file
+  echo "Restarting ${SERVICE_NAME}..."
   run_as_root systemctl restart "${SERVICE_NAME}"
 fi
 

@@ -59,7 +59,7 @@ What it does:
 Default assumptions in this repo:
 
 ```bash
-user/group: ufk
+user/group: ufk / users
 project path: /Volumes/extreme-ssd/projects/youtube-sync-practice-player
 client root: /var/www/sync.tvguitar.com
 service: sync-tvguitar.service

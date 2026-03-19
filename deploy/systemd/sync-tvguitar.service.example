@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=ufk
-Group=ufk
+Group=users
 WorkingDirectory=/Volumes/extreme-ssd/projects/youtube-sync-practice-player/api
 ExecStart=/Volumes/extreme-ssd/projects/youtube-sync-practice-player/api/youtube-sync-practice-player -config /Volumes/extreme-ssd/projects/youtube-sync-practice-player/api/config.yaml
 Restart=always

@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG="$ROOT/config.yaml"
+API_DIR="$ROOT/api"
+CONFIG="$API_DIR/config.yaml"
 SERVER_PID=""
 
 cleanup() {
@@ -23,14 +24,16 @@ if ! command -v go >/dev/null 2>&1; then
 fi
 
 if [[ ! -f "$CONFIG" ]]; then
-  cp "$ROOT/config.example.yaml" "$CONFIG"
-  echo "Created $CONFIG from config.example.yaml."
+  cp "$API_DIR/config.example.yaml" "$CONFIG"
+  echo "Created $CONFIG from api/config.example.yaml."
   echo "Update the database credentials, then run the script again."
   exit 1
 fi
 
-cd "$ROOT"
-go run . -config "$CONFIG" &
+(
+  cd "$API_DIR"
+  go run . -config "$CONFIG"
+) &
 SERVER_PID=$!
 
 sleep 2
@@ -39,6 +42,6 @@ if command -v open >/dev/null 2>&1; then
 fi
 
 echo "Go server running at http://localhost:8028 (PID $SERVER_PID)"
-echo "SQL patches in db/patches/ are applied automatically on startup."
+echo "SQL patches in api/db/patches/ are applied automatically on startup."
 echo "Press Ctrl-C to stop."
 wait "$SERVER_PID"

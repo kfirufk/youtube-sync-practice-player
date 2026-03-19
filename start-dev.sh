@@ -2,7 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG="$ROOT/config.yaml"
+API_DIR="$ROOT/api"
+CLIENT_DIR="$ROOT/client"
+CONFIG="$API_DIR/config.yaml"
 SERVER_PID=""
 CLIENT_PID=""
 
@@ -55,9 +57,9 @@ if ! command -v go >/dev/null 2>&1; then
 fi
 
 if [[ ! -f "$CONFIG" ]]; then
-  cp "$ROOT/config.example.yaml" "$CONFIG"
-  echo "Created $CONFIG from config.example.yaml."
-  echo "Update the database credentials, then run the script again."
+  cp "$API_DIR/config.example.yaml" "$CONFIG"
+  echo "Created $CONFIG from api/config.example.yaml."
+  echo "Update the database credentials, then run this script again."
   exit 1
 fi
 
@@ -73,18 +75,22 @@ fi
 
 APP_URL="http://${BROWSER_HOST}:${SERVER_PORT}/"
 
-cd "$ROOT"
-
-if [[ -f "$ROOT/package.json" ]] && command -v npm >/dev/null 2>&1; then
-  echo "Detected package.json. Starting client dev server with npm run dev..."
-  npm run dev &
+if [[ -f "$CLIENT_DIR/package.json" ]] && command -v npm >/dev/null 2>&1; then
+  echo "Detected client/package.json. Starting client dev server with npm run dev..."
+  (
+    cd "$CLIENT_DIR"
+    npm run dev
+  ) &
   CLIENT_PID=$!
 else
   echo "No separate frontend dev server detected. The Go server will serve the client directly."
 fi
 
-echo "Starting Go server..."
-go run . -config "$CONFIG" &
+echo "Starting Go server from $API_DIR..."
+(
+  cd "$API_DIR"
+  go run . -config "$CONFIG"
+) &
 SERVER_PID=$!
 
 echo "Waiting for $APP_URL to respond..."
@@ -105,7 +111,7 @@ if command -v open >/dev/null 2>&1; then
 fi
 
 echo "Development server is running at $APP_URL"
-echo "Any new SQL patch in db/patches/ will be applied automatically on startup."
+echo "Any new SQL patch in api/db/patches/ will be applied automatically on startup."
 echo "Press Ctrl-C to stop."
 
 wait "$SERVER_PID"

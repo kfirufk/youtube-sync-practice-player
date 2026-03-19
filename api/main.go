@@ -10,17 +10,17 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 )
 
 type Server struct {
-	cfg        Config
-	store      *Store
-	rootDir    string
-	httpClient *http.Client
+	cfg         Config
+	store       *Store
+	clientDir   string
+	projectRoot string
+	httpClient  *http.Client
 }
 
 func main() {
@@ -28,10 +28,13 @@ func main() {
 	flag.StringVar(&configPath, "config", "config.yaml", "Path to YAML config")
 	flag.Parse()
 
-	rootDir, err := os.Getwd()
+	absConfigPath, err := filepath.Abs(configPath)
 	if err != nil {
-		log.Fatalf("resolve working directory: %v", err)
+		log.Fatalf("resolve config path: %v", err)
 	}
+	apiDir := filepath.Dir(absConfigPath)
+	projectRoot := filepath.Dir(apiDir)
+	clientDir := filepath.Join(projectRoot, "client")
 
 	cfg, err := LoadConfig(configPath)
 	if err != nil {
@@ -45,17 +48,18 @@ func main() {
 	}
 	defer store.Close()
 
-	if err := ApplySQLPatches(ctx, store.pool, filepath.Join(rootDir, "db", "patches")); err != nil {
+	if err := ApplySQLPatches(ctx, store.pool, filepath.Join(apiDir, "db", "patches")); err != nil {
 		log.Fatalf("apply SQL patches: %v", err)
 	}
-	if err := BootstrapLegacySeeds(ctx, store, rootDir); err != nil {
+	if err := BootstrapLegacySeeds(ctx, store, apiDir); err != nil {
 		log.Fatalf("bootstrap legacy seed: %v", err)
 	}
 
 	server := &Server{
-		cfg:     cfg,
-		store:   store,
-		rootDir: rootDir,
+		cfg:         cfg,
+		store:       store,
+		clientDir:   clientDir,
+		projectRoot: projectRoot,
 		httpClient: &http.Client{
 			Timeout: 12 * time.Second,
 		},
@@ -96,27 +100,27 @@ func (s *Server) routes() http.Handler {
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	if path == "/" {
-		http.ServeFile(w, r, filepath.Join(s.rootDir, "index.html"))
+		http.ServeFile(w, r, filepath.Join(s.clientDir, "index.html"))
 		return
 	}
 
 	allowed := map[string]string{
-		"/index.html":   "index.html",
-		"/app.js":       "app.js",
-		"/styles.css":   "styles.css",
-		"/privacy.html": "privacy.html",
-		"/terms.html":   "terms.html",
-		"/cookies.html": "cookies.html",
-		"/LICENSE":      "LICENSE",
+		"/index.html":   filepath.Join(s.clientDir, "index.html"),
+		"/app.js":       filepath.Join(s.clientDir, "app.js"),
+		"/styles.css":   filepath.Join(s.clientDir, "styles.css"),
+		"/privacy.html": filepath.Join(s.clientDir, "privacy.html"),
+		"/terms.html":   filepath.Join(s.clientDir, "terms.html"),
+		"/cookies.html": filepath.Join(s.clientDir, "cookies.html"),
+		"/LICENSE":      filepath.Join(s.projectRoot, "LICENSE"),
 	}
 
-	relative, ok := allowed[path]
+	target, ok := allowed[path]
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
 
-	http.ServeFile(w, r, filepath.Join(s.rootDir, relative))
+	http.ServeFile(w, r, target)
 }
 
 func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
@@ -325,7 +329,7 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request, ide
 	}
 
 	if s.cfg.Supabase.ServiceRoleKey == "" {
-		writeError(w, http.StatusNotImplemented, "self-serve account deletion needs supabase.service_role_key in config.yaml")
+		writeError(w, http.StatusNotImplemented, "self-serve account deletion needs supabase.service_role_key in api/config.yaml")
 		return
 	}
 

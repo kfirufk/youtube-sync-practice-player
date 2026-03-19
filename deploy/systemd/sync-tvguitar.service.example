@@ -1,0 +1,16 @@
+[Unit]
+Description=sync.tvguitar.com Go server
+After=network.target
+
+[Service]
+Type=simple
+User=ufk
+Group=ufk
+WorkingDirectory=/Volumes/extreme-ssd/projects/youtube-sync-practice-player/api
+ExecStart=/Volumes/extreme-ssd/projects/youtube-sync-practice-player/api/youtube-sync-practice-player -config /Volumes/extreme-ssd/projects/youtube-sync-practice-player/api/config.yaml
+Restart=always
+RestartSec=5
+Environment=HOME=/home/ufk
+
+[Install]
+WantedBy=multi-user.target

@@ -40,6 +40,44 @@ On a Mac development machine you can also run:
 
 `start-dev.sh` waits for the app to become healthy, opens the browser automatically, and still applies any new SQL patches through the Go startup flow.
 
+## Production deploy
+
+Use:
+
+```bash
+./deploy-production.sh
+```
+
+What it does:
+
+- runs `git pull --ff-only`
+- builds the Go server binary into `api/youtube-sync-practice-player`
+- copies the static client files into `/var/www/sync.tvguitar.com` by default
+- creates or restarts `sync-tvguitar.service`
+- prints an nginx example that serves the client and reverse-proxies `/api/` to the Go server
+
+Default assumptions in this repo:
+
+```bash
+user/group: ufk
+project path: /Volumes/extreme-ssd/projects/youtube-sync-practice-player
+client root: /var/www/sync.tvguitar.com
+service: sync-tvguitar.service
+domain: sync.tvguitar.com
+backend: 127.0.0.1:8028
+```
+
+If you need to override something, use flags instead of environment variables:
+
+```bash
+./deploy-production.sh --client-dir /var/www/sync.tvguitar.com --port 8028
+```
+
+Example config files are included at:
+
+- `deploy/systemd/sync-tvguitar.service.example`
+- `deploy/nginx/sync-tvguitar.conf.example`
+
 ## Project layout
 
 - `api/`: Go server, PostgreSQL config, seed import, and SQL patches

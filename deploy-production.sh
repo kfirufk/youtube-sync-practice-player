@@ -15,6 +15,7 @@ SERVER_HOST="127.0.0.1"
 SERVER_PORT="8028"
 NGINX_SERVER_NAME="sync.tvguitar.com"
 NGINX_CONF_PATH="/etc/nginx/sites-available/${NGINX_SERVER_NAME}.conf"
+OVERWRITE_SERVICE=0
 
 usage() {
   cat <<EOF
@@ -32,6 +33,7 @@ Options:
   --port PORT           Backend port used in nginx example
   --domain NAME         Server name for nginx
   --nginx-conf PATH     Nginx config file path shown in the example
+  --overwrite-service   Rewrite the systemd unit even if it already exists
   --help                Show this help
 EOF
 }
@@ -82,6 +84,10 @@ while [[ $# -gt 0 ]]; do
     --nginx-conf)
       NGINX_CONF_PATH="$2"
       shift 2
+      ;;
+    --overwrite-service)
+      OVERWRITE_SERVICE=1
+      shift
       ;;
     --help)
       usage
@@ -197,13 +203,23 @@ run_as_root mkdir -p "${CLIENT_TARGET_DIR}"
 run_as_root rsync -av --delete "${CLIENT_DIR}/" "${CLIENT_TARGET_DIR}/"
 
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}"
-echo "Writing ${SERVICE_NAME}..."
-write_service_file
-
+SERVICE_ACTION="reused existing unit"
 if run_as_root test -f "${SERVICE_PATH}"; then
-  echo "Restarting ${SERVICE_NAME}..."
-  run_as_root systemctl restart "${SERVICE_NAME}"
+  if [[ "${OVERWRITE_SERVICE}" -eq 1 ]]; then
+    echo "Overwriting ${SERVICE_NAME}..."
+    write_service_file
+    SERVICE_ACTION="overwrote existing unit"
+  else
+    echo "Keeping existing ${SERVICE_NAME}..."
+  fi
+else
+  echo "Creating ${SERVICE_NAME}..."
+  write_service_file
+  SERVICE_ACTION="created new unit"
 fi
+
+echo "Restarting ${SERVICE_NAME}..."
+run_as_root systemctl restart "${SERVICE_NAME}"
 
 echo
 echo "Deployment complete."
@@ -211,6 +227,7 @@ echo "Binary: ${BINARY_PATH}"
 echo "Config: ${CONFIG_PATH}"
 echo "Client root: ${CLIENT_TARGET_DIR}"
 echo "Service: ${SERVICE_NAME}"
+echo "Service unit: ${SERVICE_ACTION}"
 echo
 echo "Service status:"
 run_as_root systemctl status "${SERVICE_NAME}" --no-pager || true

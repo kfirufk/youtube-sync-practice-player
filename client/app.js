@@ -2195,6 +2195,9 @@ function acceptCookies(optionalAllowed) {
     savedAt: Date.now()
   }));
   dom.cookieBanner.classList.add("hidden");
+  if (optionalAllowed && typeof window.enableGoogleTagManager === "function") {
+    window.enableGoogleTagManager();
+  }
 }
 
 async function deleteAccount() {

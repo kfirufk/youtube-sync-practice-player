@@ -2182,13 +2182,19 @@ function escapeHtml(text) {
 }
 
 function handleCookieBanner() {
-  const saved = safeGet(STORAGE_KEYS.cookies, null);
-  if (!saved) {
-    dom.cookieBanner.classList.remove("hidden");
+  if (window.syncConsent?.maybeShowBanner) {
+    window.syncConsent.maybeShowBanner();
+    return;
   }
+  const saved = safeGet(STORAGE_KEYS.cookies, null);
+  if (!saved) dom.cookieBanner.classList.remove("hidden");
 }
 
 function acceptCookies(optionalAllowed) {
+  if (window.syncConsent?.saveConsentChoice) {
+    window.syncConsent.saveConsentChoice(optionalAllowed);
+    return;
+  }
   safeSet(STORAGE_KEYS.cookies, JSON.stringify({
     essential: true,
     optional: Boolean(optionalAllowed),
@@ -2348,8 +2354,10 @@ function bindEvents() {
     scheduleAutosave();
   });
   dom.deleteAccountBtn.addEventListener("click", deleteAccount);
-  dom.cookieEssentialBtn.addEventListener("click", () => acceptCookies(false));
-  dom.cookieAcceptBtn.addEventListener("click", () => acceptCookies(true));
+  if (!window.syncConsent) {
+    dom.cookieEssentialBtn.addEventListener("click", () => acceptCookies(false));
+    dom.cookieAcceptBtn.addEventListener("click", () => acceptCookies(true));
+  }
 
   dom.scrubber.addEventListener("input", () => {
     userScrubbing = true;

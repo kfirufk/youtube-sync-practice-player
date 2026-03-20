@@ -352,25 +352,52 @@
         </article>
       </aside>
 
-      <section class="playerSurface">
-        <section class="players">
-          <div class="playerWrap">
-            <div class="playerHeading">
-              <p class="playerTitle">Tutorial</p>
-              <span id="pianoPlayerStatus" class="playerStatusBadge" data-state="idle">Not loaded</span>
-            </div>
-            <div class="playerBox"><div id="pianoPlayer"></div></div>
-          </div>
-          <div class="playerWrap">
-            <div class="playerHeading">
-              <p class="playerTitle">Official Clip</p>
-              <span id="songPlayerStatus" class="playerStatusBadge" data-state="idle">Not loaded</span>
-            </div>
-            <div class="playerBox"><div id="songPlayer"></div></div>
-          </div>
-        </section>
+      <section id="playerSurface" class="playerSurface">
+        <div id="practiceStage" class="practiceStage">
+          <div class="playersCard">
+            <section id="playersGrid" class="players">
+              <div class="playerWrap">
+                <div class="playerHeading">
+                  <p class="playerTitle">Tutorial</p>
+                  <span id="pianoPlayerStatus" class="playerStatusBadge" data-state="idle">Not loaded</span>
+                </div>
+                <div class="playerBox"><div id="pianoPlayer"></div></div>
+              </div>
+              <div class="playerWrap">
+                <div class="playerHeading">
+                  <p class="playerTitle">Official Clip</p>
+                  <span id="songPlayerStatus" class="playerStatusBadge" data-state="idle">Not loaded</span>
+                </div>
+                <div class="playerBox"><div id="songPlayer"></div></div>
+              </div>
+            </section>
 
-        <section class="transport card">
+            <div class="stageSizer">
+              <div class="stageSizerTop">
+                <div>
+                  <p class="stageSizerLabel">Practice layout</p>
+                  <p id="practiceLayoutStatus" class="stageSizerStatus small muted">Auto fit will tune the stage to your window.</p>
+                </div>
+                <button id="resetPracticeStageBtn" class="secondary" type="button">Auto fit</button>
+              </div>
+              <input
+                id="practiceStageBalance"
+                class="stageSizerInput"
+                type="range"
+                min="34"
+                max="74"
+                step="1"
+                value="54"
+                aria-label="Practice stage size"
+              />
+              <div class="stageSizerScale small muted">
+                <span>More lyrics</span>
+                <span>More video</span>
+              </div>
+            </div>
+          </div>
+
+          <section class="transport card">
           <div class="transportTop">
             <div class="transportButtons">
               <button id="playBtn" class="iconBtn large" type="button" disabled aria-label="Play / Pause">
@@ -409,9 +436,10 @@
             <div class="diagCell"><span>Buffer events</span><strong id="diagBuffering">0</strong></div>
             <div class="diagCell"><span>Loop cycles</span><strong id="diagLoops">0</strong></div>
           </div>
-        </section>
+          </section>
+        </div>
 
-        <section class="lyricsSection card">
+        <section id="lyricsSection" class="lyricsSection card">
           <div class="lyricsHeader">
             <div>
               <p class="eyebrow">Practice</p>

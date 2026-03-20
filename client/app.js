@@ -112,6 +112,13 @@ const dom = {
   togglePracticeHelperBtn: el("togglePracticeHelperBtn"),
   practiceHelper: el("practiceHelper"),
   practiceModeBtn: el("practiceModeBtn"),
+  playerSurface: el("playerSurface"),
+  practiceStage: el("practiceStage"),
+  playersGrid: el("playersGrid"),
+  practiceStageBalance: el("practiceStageBalance"),
+  practiceLayoutStatus: el("practiceLayoutStatus"),
+  resetPracticeStageBtn: el("resetPracticeStageBtn"),
+  lyricsSection: el("lyricsSection"),
   lyricsFocusBtn: el("lyricsFocusBtn"),
   lyricsBox: el("lyricsBox"),
   timeLabel: el("timeLabel"),
@@ -184,6 +191,12 @@ const app = {
   searchTerm: "",
   authMode: "login",
   practiceHelperVisible: true,
+  practiceLayout: {
+    manual: false,
+    balance: 54,
+    autoBalance: 54,
+    mode: "stack"
+  },
   playerUiState: {
     song: { hasStartedPlayback: false },
     piano: { hasStartedPlayback: false }
@@ -219,6 +232,7 @@ let lastPlayRequestAt = 0;
 let lastPianoCorrectionAt = 0;
 let lastActiveLyricIndex = -1;
 let autosaveTimer = null;
+let practiceLayoutFrame = 0;
 
 class MetronomeEngine {
   constructor() {
@@ -631,6 +645,143 @@ function renderPracticeContext() {
     : `Created by ${owner}. This song is available for practice, while editing stays locked to its creator.`;
 }
 
+function clearPracticeLayoutStyles() {
+  delete document.body.dataset.practiceLayout;
+  dom.playerSurface.style.gridTemplateColumns = "";
+  dom.playerSurface.style.minHeight = "";
+  dom.practiceStage.style.width = "";
+  dom.practiceStage.style.maxWidth = "";
+  dom.lyricsSection.style.height = "";
+  document.documentElement.style.removeProperty("--practice-player-min");
+  dom.practiceStageBalance.value = String(app.practiceLayout.autoBalance || 54);
+  dom.practiceLayoutStatus.textContent = "Auto fit will tune the stage to your window.";
+}
+
+function estimatePracticeVideoHeight(stageWidth) {
+  return Math.round(((Math.max(stageWidth, 360) - 14) / 2) * 9 / 16);
+}
+
+function computeAutoPracticeBalance(viewportWidth, viewportHeight) {
+  const aspect = viewportWidth / Math.max(viewportHeight, 1);
+  let balance = 58;
+  if (aspect >= 2.35) balance = 42;
+  else if (aspect >= 2.05) balance = 46;
+  else if (aspect >= 1.8) balance = 50;
+  else if (aspect >= 1.55) balance = 54;
+  else if (aspect >= 1.3) balance = 58;
+  else balance = 62;
+
+  if (viewportHeight < 900) balance -= 2;
+  if (viewportHeight < 760) balance -= 4;
+  return clamp(Math.round(balance), 34, 74);
+}
+
+function describePracticeLayout(mode, balance, manual) {
+  const emphasis = balance <= 45
+    ? "lyrics-first"
+    : balance >= 64
+      ? "video-first"
+      : "balanced";
+  const layout = mode === "split"
+    ? "split view"
+    : mode === "compact"
+      ? "compact stack"
+      : "stacked view";
+  return manual
+    ? `Manual ${emphasis} ${layout}. Auto fit will snap it back to the window.`
+    : `Auto-fit ${layout} with a ${emphasis} stage.`;
+}
+
+function applyPracticeLayout(forceAuto = false) {
+  if (app.screen !== "practice") {
+    clearPracticeLayoutStyles();
+    return;
+  }
+
+  const viewportWidth = Math.max(window.innerWidth || 0, 360);
+  const viewportHeight = Math.max(window.innerHeight || 0, 420);
+  const contextHeight = dom.practiceContextBar.offsetHeight || 0;
+  const availableHeight = Math.max(430, viewportHeight - contextHeight - 42);
+  const autoBalance = computeAutoPracticeBalance(viewportWidth, viewportHeight);
+  app.practiceLayout.autoBalance = autoBalance;
+
+  if (!app.practiceLayout.manual || forceAuto) {
+    app.practiceLayout.balance = autoBalance;
+    app.practiceLayout.manual = false;
+  }
+
+  const balance = clamp(Math.round(ensureNumber(app.practiceLayout.balance, autoBalance)), 34, 74);
+  const normalized = (balance - 34) / 40;
+  const split = viewportWidth >= 1040 && availableHeight >= 560;
+  const mode = split ? "split" : (viewportWidth < 800 || availableHeight < 560 ? "compact" : "stack");
+
+  let gridTemplateColumns = "minmax(0, 1fr)";
+  let stageWidth;
+  let lyricsHeight;
+  let playerMin;
+
+  if (split) {
+    const referenceMin = viewportWidth < 1280 ? 300 : 340;
+    const referenceMax = Math.min(viewportWidth < 1280 ? 400 : 460, Math.max(referenceMin, Math.round(viewportWidth * 0.32)));
+    const referenceWidth = clamp(Math.round(referenceMax - normalized * 92), referenceMin, referenceMax);
+    const horizontalLimit = Math.max(680, viewportWidth - referenceWidth - 56);
+    const reservedTransport = 214;
+    const reservedSizer = 96;
+    const videoHeightBudget = Math.max(210, availableHeight - reservedTransport - reservedSizer - 24);
+    const heightLimitedStage = Math.round(videoHeightBudget * (32 / 9) + 14);
+    const stageMin = Math.min(horizontalLimit, viewportWidth < 1280 ? 744 : 860);
+    const stageMax = Math.max(stageMin, Math.min(horizontalLimit, heightLimitedStage, 1700));
+
+    stageWidth = Math.round(stageMin + normalized * (stageMax - stageMin));
+    lyricsHeight = availableHeight;
+    playerMin = viewportWidth < 1180 ? 220 : 260;
+    gridTemplateColumns = `minmax(0, 1fr) minmax(${referenceWidth}px, ${referenceWidth}px)`;
+  } else {
+    const reservedTransport = mode === "compact" ? 186 : 202;
+    const reservedSizer = 96;
+    const minLyricsHeight = mode === "compact" ? 150 : 210;
+    const targetLyricsHeight = clamp(
+      Math.round(availableHeight * (mode === "compact" ? 0.27 : 0.34)),
+      minLyricsHeight,
+      mode === "compact" ? 230 : 320
+    );
+    const videoHeightBudget = Math.max(150, availableHeight - targetLyricsHeight - reservedTransport - reservedSizer - 42);
+    const horizontalLimit = Math.max(420, viewportWidth - 28);
+    const heightLimitedStage = Math.round(videoHeightBudget * (32 / 9) + 14);
+    const stageMin = Math.min(horizontalLimit, mode === "compact" ? 480 : 640);
+    const stageMax = Math.max(stageMin, Math.min(horizontalLimit, heightLimitedStage));
+
+    stageWidth = Math.round(stageMin + normalized * (stageMax - stageMin));
+    const videoHeight = estimatePracticeVideoHeight(stageWidth);
+    lyricsHeight = clamp(
+      availableHeight - videoHeight - reservedTransport - reservedSizer - 42,
+      minLyricsHeight,
+      mode === "compact" ? 240 : 360
+    );
+    playerMin = mode === "compact" ? 200 : 240;
+  }
+
+  app.practiceLayout.balance = balance;
+  app.practiceLayout.mode = mode;
+  document.body.dataset.practiceLayout = mode;
+  document.documentElement.style.setProperty("--practice-player-min", `${playerMin}px`);
+  dom.practiceStage.style.width = "100%";
+  dom.practiceStage.style.maxWidth = `${Math.max(360, stageWidth)}px`;
+  dom.playerSurface.style.gridTemplateColumns = gridTemplateColumns;
+  dom.playerSurface.style.minHeight = `${availableHeight}px`;
+  dom.lyricsSection.style.height = `${Math.max(140, lyricsHeight)}px`;
+  dom.practiceStageBalance.value = String(balance);
+  dom.practiceLayoutStatus.textContent = describePracticeLayout(mode, balance, app.practiceLayout.manual);
+}
+
+function schedulePracticeLayout(forceAuto = false) {
+  if (practiceLayoutFrame) cancelAnimationFrame(practiceLayoutFrame);
+  practiceLayoutFrame = window.requestAnimationFrame(() => {
+    practiceLayoutFrame = 0;
+    applyPracticeLayout(forceAuto);
+  });
+}
+
 function pausePlayback() {
   cancelCountdown();
   if (songPlayer?.pauseVideo) songPlayer.pauseVideo();
@@ -664,6 +815,7 @@ function renderShell() {
   dom.practiceModeBtn.textContent = "Open fullscreen practice";
   renderCreateActions();
   renderPracticeContext();
+  schedulePracticeLayout();
 }
 
 function setScreen(nextScreen, options = {}) {
@@ -675,6 +827,7 @@ function setScreen(nextScreen, options = {}) {
 
   if (target === "practice") {
     app.returnScreen = options.returnScreen || (app.screen === "workspace" ? "workspace" : "lobby");
+    if (app.screen !== "practice") app.practiceLayout.manual = false;
   }
 
   if (target === "lobby") {
@@ -1143,9 +1296,11 @@ function renderPracticeHelper() {
   const shortcutRows = [
     { key: app.settings.shortcuts.playPause, action: "Play / pause" },
     { key: app.settings.shortcuts.restart, action: "Restart" },
+    { key: app.settings.shortcuts.mute, action: "Mute tutorial" },
+    { key: app.settings.shortcuts.metronomeToggle, action: "Metronome" },
     { key: app.settings.shortcuts.captureMarker, action: "Capture / retarget label" },
     { key: app.settings.shortcuts.toggleShortcutLegend, action: "Show / hide helper" },
-    { key: app.settings.shortcuts.practiceMode, action: "Toggle fullscreen practice" },
+    { key: app.settings.shortcuts.practiceMode, action: "Fullscreen practice" },
     { key: "Left / Right", action: "Seek 5 seconds" }
   ];
 
@@ -1176,6 +1331,7 @@ function renderPracticeHelper() {
 function renderPracticeHelperVisibility() {
   dom.practiceHelper.classList.toggle("hidden", !app.practiceHelperVisible);
   dom.togglePracticeHelperBtn.textContent = app.practiceHelperVisible ? "Hide helper" : "Show helper";
+  schedulePracticeLayout();
 }
 
 function renderShortcutsModal() {
@@ -1426,7 +1582,6 @@ async function practiceSong(songId) {
   app.returnScreen = app.screen === "workspace" ? "workspace" : "lobby";
   dom.practiceSongTitle.textContent = "Loading practice…";
   dom.practiceSongMeta.textContent = "Fetching the song and lining up both videos.";
-  setScreen("practice", { requestFullscreen: true, returnScreen: app.returnScreen });
 
   const song = await loadSong(songId, { silent: true });
   if (!song) {
@@ -1434,6 +1589,7 @@ async function practiceSong(songId) {
     return;
   }
 
+  setScreen("practice", { requestFullscreen: true, returnScreen: app.returnScreen });
   const started = await loadPlayers({
     readyToast: `Videos ready for ${song.artist} — ${song.title}. Press play when you are ready.`
   });
@@ -2009,7 +2165,9 @@ function togglePracticeMode(force) {
 function onFullscreenChange() {
   if (!document.fullscreenElement && app.screen === "practice") {
     setScreen(app.returnScreen === "workspace" && canAccessWorkspace() ? "workspace" : "lobby");
+    return;
   }
+  schedulePracticeLayout();
 }
 
 function calibrateUsingCurrentFrame() {
@@ -2128,6 +2286,7 @@ async function loadPlayers(options = {}) {
       setCalibrateStatus("Players loaded. Calibrate if the frames do not match musically.");
       setPlayerStatus("song", "ready");
       setPlayerStatus("piano", "ready");
+      schedulePracticeLayout();
       if (readyToast) showToast(readyToast, "success");
     }, 200);
   };
@@ -2347,6 +2506,15 @@ function bindEvents() {
   dom.toggleMetronomeBtn.addEventListener("click", toggleMetronome);
   dom.resyncBtn.addEventListener("click", resyncNow);
   dom.practiceModeBtn.addEventListener("click", () => togglePracticeMode());
+  dom.practiceStageBalance.addEventListener("input", () => {
+    app.practiceLayout.manual = true;
+    app.practiceLayout.balance = ensureNumber(dom.practiceStageBalance.value, app.practiceLayout.autoBalance);
+    applyPracticeLayout();
+  });
+  dom.resetPracticeStageBtn.addEventListener("click", () => {
+    app.practiceLayout.manual = false;
+    schedulePracticeLayout(true);
+  });
   dom.togglePracticeHelperBtn.addEventListener("click", () => {
     app.practiceHelperVisible = !app.practiceHelperVisible;
     dom.showPracticeShortcutLegend.value = String(app.practiceHelperVisible);
@@ -2376,6 +2544,7 @@ function bindEvents() {
   });
 
   document.addEventListener("fullscreenchange", onFullscreenChange);
+  window.addEventListener("resize", () => schedulePracticeLayout());
   window.addEventListener("keydown", handleKeydown);
 }
 

@@ -163,6 +163,11 @@ func (s *Store) ListUserSongs(ctx context.Context, userID string) ([]SongCard, e
 }
 
 func (s *Store) GetSong(ctx context.Context, songID string, viewerID string) (Song, error) {
+	var viewerUUID any
+	if strings.TrimSpace(viewerID) != "" {
+		viewerUUID = viewerID
+	}
+
 	row := s.pool.QueryRow(ctx, `
 		select
 			songs.id,
@@ -191,7 +196,7 @@ func (s *Store) GetSong(ctx context.Context, songID string, viewerID string) (So
 		left join user_profiles on user_profiles.user_id = songs.owner_user_id and user_profiles.deleted_at is null
 		where songs.id = $1
 		  and (songs.published = true or songs.owner_user_id = $2)
-	`, songID, viewerID)
+	`, songID, viewerUUID)
 
 	song, err := scanSongRow(row, viewerID)
 	if err != nil {

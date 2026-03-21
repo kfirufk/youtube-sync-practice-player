@@ -1282,9 +1282,9 @@ body.practice-mode .lyricsPracticeGrid,
 body[data-screen="practice"] .lyricsPracticeGrid {
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "helper"
-    "lyrics";
-  grid-template-rows: auto minmax(0, 1fr);
+    "lyrics"
+    "helper";
+  grid-template-rows: minmax(0, 1fr) auto;
   min-height: 0;
   height: 100%;
 }
@@ -1306,8 +1306,8 @@ body[data-screen="practice"] .practiceHelper {
 
 body.practice-mode[data-practice-reference-layout="dual"] .lyricsPracticeGrid,
 body[data-screen="practice"][data-practice-reference-layout="dual"] .lyricsPracticeGrid {
-  grid-template-areas: "helper lyrics";
-  grid-template-columns: 214px minmax(0, 1fr);
+  grid-template-areas: "lyrics helper";
+  grid-template-columns: minmax(240px, 1fr) 188px;
 }
 
 body.practice-mode[data-practice-reference-layout="dual"] .practiceHelper,

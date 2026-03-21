@@ -117,6 +117,7 @@ const dom = {
   playersGrid: el("playersGrid"),
   practiceStageBalance: el("practiceStageBalance"),
   practiceLayoutStatus: el("practiceLayoutStatus"),
+  practiceLayoutBadge: el("practiceLayoutBadge"),
   resetPracticeStageBtn: el("resetPracticeStageBtn"),
   lyricsSection: el("lyricsSection"),
   lyricsFocusBtn: el("lyricsFocusBtn"),
@@ -647,6 +648,7 @@ function renderPracticeContext() {
 
 function clearPracticeLayoutStyles() {
   delete document.body.dataset.practiceLayout;
+  delete document.body.dataset.practiceReferenceLayout;
   dom.playerSurface.style.gridTemplateColumns = "";
   dom.playerSurface.style.minHeight = "";
   dom.practiceStage.style.width = "";
@@ -655,6 +657,7 @@ function clearPracticeLayoutStyles() {
   document.documentElement.style.removeProperty("--practice-player-min");
   dom.practiceStageBalance.value = String(app.practiceLayout.autoBalance || 54);
   dom.practiceLayoutStatus.textContent = "Auto fit will tune the stage to your window.";
+  dom.practiceLayoutBadge.textContent = "Balanced";
 }
 
 function estimatePracticeVideoHeight(stageWidth) {
@@ -677,11 +680,7 @@ function computeAutoPracticeBalance(viewportWidth, viewportHeight) {
 }
 
 function describePracticeLayout(mode, balance, manual) {
-  const emphasis = balance <= 45
-    ? "lyrics-first"
-    : balance >= 64
-      ? "video-first"
-      : "balanced";
+  const emphasis = getPracticeEmphasis(balance).toLowerCase();
   const layout = mode === "split"
     ? "split view"
     : mode === "compact"
@@ -690,6 +689,12 @@ function describePracticeLayout(mode, balance, manual) {
   return manual
     ? `Manual ${emphasis} ${layout}. Auto fit will snap it back to the window.`
     : `Auto-fit ${layout} with a ${emphasis} stage.`;
+}
+
+function getPracticeEmphasis(balance) {
+  if (balance <= 45) return "Lyrics-first";
+  if (balance >= 64) return "Video-first";
+  return "Balanced";
 }
 
 function applyPracticeLayout(forceAuto = false) {
@@ -719,10 +724,12 @@ function applyPracticeLayout(forceAuto = false) {
   let stageWidth;
   let lyricsHeight;
   let playerMin;
+  let referenceLayout = "stacked";
 
   if (split) {
-    const referenceMin = viewportWidth < 1280 ? 300 : 340;
-    const referenceMax = Math.min(viewportWidth < 1280 ? 400 : 460, Math.max(referenceMin, Math.round(viewportWidth * 0.32)));
+    const ultraWide = viewportWidth >= 1550;
+    const referenceMin = ultraWide ? 440 : (viewportWidth < 1280 ? 300 : 340);
+    const referenceMax = Math.min(ultraWide ? 600 : (viewportWidth < 1280 ? 400 : 460), Math.max(referenceMin, Math.round(viewportWidth * (ultraWide ? 0.36 : 0.32))));
     const referenceWidth = clamp(Math.round(referenceMax - normalized * 92), referenceMin, referenceMax);
     const horizontalLimit = Math.max(680, viewportWidth - referenceWidth - 56);
     const reservedTransport = 214;
@@ -736,6 +743,7 @@ function applyPracticeLayout(forceAuto = false) {
     lyricsHeight = availableHeight;
     playerMin = viewportWidth < 1180 ? 220 : 260;
     gridTemplateColumns = `minmax(0, 1fr) minmax(${referenceWidth}px, ${referenceWidth}px)`;
+    referenceLayout = referenceWidth >= 480 && availableHeight >= 700 ? "dual" : "stacked";
   } else {
     const reservedTransport = mode === "compact" ? 186 : 202;
     const reservedSizer = 96;
@@ -764,6 +772,7 @@ function applyPracticeLayout(forceAuto = false) {
   app.practiceLayout.balance = balance;
   app.practiceLayout.mode = mode;
   document.body.dataset.practiceLayout = mode;
+  document.body.dataset.practiceReferenceLayout = referenceLayout;
   document.documentElement.style.setProperty("--practice-player-min", `${playerMin}px`);
   dom.practiceStage.style.width = "100%";
   dom.practiceStage.style.maxWidth = `${Math.max(360, stageWidth)}px`;
@@ -772,6 +781,7 @@ function applyPracticeLayout(forceAuto = false) {
   dom.lyricsSection.style.height = `${Math.max(140, lyricsHeight)}px`;
   dom.practiceStageBalance.value = String(balance);
   dom.practiceLayoutStatus.textContent = describePracticeLayout(mode, balance, app.practiceLayout.manual);
+  dom.practiceLayoutBadge.textContent = getPracticeEmphasis(balance);
 }
 
 function schedulePracticeLayout(forceAuto = false) {

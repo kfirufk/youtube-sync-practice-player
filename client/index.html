@@ -374,12 +374,16 @@
 
             <div class="stageSizer">
               <div class="stageSizerTop">
-                <div>
+                <div class="stageSizerCopy">
                   <p class="stageSizerLabel">Practice layout</p>
-                  <p id="practiceLayoutStatus" class="stageSizerStatus small muted">Auto fit will tune the stage to your window.</p>
+                  <div class="stageSizerMeta">
+                    <p id="practiceLayoutStatus" class="stageSizerStatus small muted">Auto fit will tune the stage to your window.</p>
+                    <span id="practiceLayoutBadge" class="stageSizerBadge">Balanced</span>
+                  </div>
                 </div>
                 <button id="resetPracticeStageBtn" class="secondary" type="button">Auto fit</button>
               </div>
+              <p class="stageSizerHint small">Drag the bar to rebalance the stage against the lyrics.</p>
               <input
                 id="practiceStageBalance"
                 class="stageSizerInput"
@@ -398,44 +402,44 @@
           </div>
 
           <section class="transport card">
-          <div class="transportTop">
-            <div class="transportButtons">
-              <button id="playBtn" class="iconBtn large" type="button" disabled aria-label="Play / Pause">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path id="playIconPath" d="M8 5v14l11-7z"></path></svg>
-              </button>
-              <button id="restartBtn" class="iconBtn" type="button" disabled aria-label="Back to start">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 7l5 5V9c3.3 0 6 2.7 6 6s-2.7 6-6 6a6 6 0 0 1-5.7-4H4.2A8 8 0 1 0 12 5"></path></svg>
-              </button>
-              <button id="mutePianoBtn" class="iconBtn" type="button" disabled aria-label="Mute tutorial">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path id="muteIconPath" d="M5 9v6h4l5 5V4L9 9Zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4"></path></svg>
-              </button>
-              <button id="lyricsFocusBtn" class="iconBtn" type="button" aria-label="Focus lyrics">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v2H6v5H4Zm10 0h6v6h-2V6h-4ZM4 14h2v4h5v2H4Zm14 0h2v6h-6v-2h4Z"></path></svg>
-              </button>
+            <div class="transportTop">
+              <div class="transportButtons">
+                <button id="playBtn" class="iconBtn large" type="button" disabled aria-label="Play / Pause">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path id="playIconPath" d="M8 5v14l11-7z"></path></svg>
+                </button>
+                <button id="restartBtn" class="iconBtn" type="button" disabled aria-label="Back to start">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 7l5 5V9c3.3 0 6 2.7 6 6s-2.7 6-6 6a6 6 0 0 1-5.7-4H4.2A8 8 0 1 0 12 5"></path></svg>
+                </button>
+                <button id="mutePianoBtn" class="iconBtn" type="button" disabled aria-label="Mute tutorial">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path id="muteIconPath" d="M5 9v6h4l5 5V4L9 9Zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4"></path></svg>
+                </button>
+                <button id="lyricsFocusBtn" class="iconBtn" type="button" aria-label="Focus lyrics">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v2H6v5H4Zm10 0h6v6h-2V6h-4ZM4 14h2v4h5v2H4Zm14 0h2v6h-6v-2h4Z"></path></svg>
+                </button>
+              </div>
+              <div id="timeLabel" class="timeLabel">00:00 / 00:00</div>
             </div>
-            <div id="timeLabel" class="timeLabel">00:00 / 00:00</div>
-          </div>
 
-          <input id="scrubber" type="range" min="0" max="100" value="0" step="0.01" disabled />
+            <input id="scrubber" type="range" min="0" max="100" value="0" step="0.01" disabled />
 
-          <div class="loopControls">
-            <div id="loopStatus" class="loopStatus">Loop: Off</div>
-            <button id="toggleLoopBtn" class="secondary" type="button">Toggle loop</button>
-            <button id="setLoopABtn" class="secondary" type="button">Set A</button>
-            <button id="setLoopBBtn" class="secondary" type="button">Set B</button>
-            <button id="clearLoopBtn" class="secondary" type="button">Clear</button>
-            <label for="loopRepeats">Repeats</label>
-            <input id="loopRepeats" type="number" min="0" step="1" value="4" />
-            <button id="toggleMetronomeBtn" class="secondary" type="button">Metronome Off</button>
-            <button id="resyncBtn" class="secondary" type="button">Resync now</button>
-          </div>
+            <div class="loopControls">
+              <div id="loopStatus" class="loopStatus">Loop: Off</div>
+              <button id="toggleLoopBtn" class="secondary" type="button">Toggle loop</button>
+              <button id="setLoopABtn" class="secondary" type="button">Set A</button>
+              <button id="setLoopBBtn" class="secondary" type="button">Set B</button>
+              <button id="clearLoopBtn" class="secondary" type="button">Clear</button>
+              <label for="loopRepeats">Repeats</label>
+              <input id="loopRepeats" type="number" min="0" step="1" value="4" />
+              <button id="toggleMetronomeBtn" class="secondary" type="button">Metronome Off</button>
+              <button id="resyncBtn" class="secondary" type="button">Resync now</button>
+            </div>
 
-          <div class="diagGrid" id="diagGrid">
-            <div class="diagCell"><span>Drift</span><strong id="diagDrift">0 ms</strong></div>
-            <div class="diagCell"><span>Corrections</span><strong id="diagCorrections">0</strong></div>
-            <div class="diagCell"><span>Buffer events</span><strong id="diagBuffering">0</strong></div>
-            <div class="diagCell"><span>Loop cycles</span><strong id="diagLoops">0</strong></div>
-          </div>
+            <div class="diagGrid" id="diagGrid">
+              <div class="diagCell"><span>Drift</span><strong id="diagDrift">0 ms</strong></div>
+              <div class="diagCell"><span>Corrections</span><strong id="diagCorrections">0</strong></div>
+              <div class="diagCell"><span>Buffer events</span><strong id="diagBuffering">0</strong></div>
+              <div class="diagCell"><span>Loop cycles</span><strong id="diagLoops">0</strong></div>
+            </div>
           </section>
         </div>
 

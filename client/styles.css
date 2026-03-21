@@ -562,7 +562,8 @@ button.danger {
 .stageSizer {
   display: none;
   gap: 8px;
-  padding-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(123, 151, 183, 0.18);
 }
 
 .stageSizerTop,
@@ -570,6 +571,18 @@ button.danger {
   display: flex;
   gap: 12px;
   justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.stageSizerCopy {
+  display: grid;
+  gap: 6px;
+}
+
+.stageSizerMeta {
+  display: flex;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -587,6 +600,22 @@ button.danger {
   margin: 0;
 }
 
+.stageSizerBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.16);
+  color: var(--ink);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.stageSizerHint {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
 .stageSizerInput {
   width: 100%;
   margin: 0;
@@ -596,36 +625,47 @@ button.danger {
 }
 
 .stageSizerInput::-webkit-slider-runnable-track {
-  height: 8px;
+  height: 12px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(59, 130, 246, 0.32), rgba(14, 165, 233, 0.72));
+  background:
+    linear-gradient(90deg, rgba(59, 130, 246, 0.28), rgba(14, 165, 233, 0.76)),
+    rgba(9, 17, 28, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(123, 151, 183, 0.22);
 }
 
 .stageSizerInput::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   margin-top: -6px;
   border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.9);
+  border: 3px solid rgba(255, 255, 255, 0.92);
   background: var(--panel-strong);
   box-shadow: 0 8px 18px rgba(2, 7, 17, 0.4);
 }
 
 .stageSizerInput::-moz-range-track {
-  height: 8px;
+  height: 12px;
   border: none;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(59, 130, 246, 0.32), rgba(14, 165, 233, 0.72));
+  background:
+    linear-gradient(90deg, rgba(59, 130, 246, 0.28), rgba(14, 165, 233, 0.76)),
+    rgba(9, 17, 28, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(123, 151, 183, 0.22);
 }
 
 .stageSizerInput::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.9);
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255, 255, 255, 0.92);
   border-radius: 999px;
   background: var(--panel-strong);
   box-shadow: 0 8px 18px rgba(2, 7, 17, 0.4);
+}
+
+.stageSizerInput:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.38);
+  outline-offset: 6px;
 }
 
 .transportTop {
@@ -1264,6 +1304,30 @@ body[data-screen="practice"] .practiceHelper {
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
+body.practice-mode[data-practice-reference-layout="dual"] .lyricsPracticeGrid,
+body[data-screen="practice"][data-practice-reference-layout="dual"] .lyricsPracticeGrid {
+  grid-template-areas: "helper lyrics";
+  grid-template-columns: 214px minmax(0, 1fr);
+}
+
+body.practice-mode[data-practice-reference-layout="dual"] .practiceHelper,
+body[data-screen="practice"][data-practice-reference-layout="dual"] .practiceHelper {
+  grid-template-columns: 1fr;
+  min-height: 0;
+}
+
+body.practice-mode[data-practice-reference-layout="dual"] .shortcutSummary,
+body.practice-mode[data-practice-reference-layout="dual"] .markerJumpLegend,
+body[data-screen="practice"][data-practice-reference-layout="dual"] .shortcutSummary,
+body[data-screen="practice"][data-practice-reference-layout="dual"] .markerJumpLegend {
+  grid-template-columns: 1fr;
+}
+
+body.practice-mode[data-practice-reference-layout="dual"] .lyricsBox,
+body[data-screen="practice"][data-practice-reference-layout="dual"] .lyricsBox {
+  height: 100%;
+}
+
 body.practice-mode[data-practice-layout="split"] .lyricsSection,
 body[data-screen="practice"][data-practice-layout="split"] .lyricsSection {
   position: sticky;
@@ -1387,6 +1451,10 @@ body.lyrics-focus .lyricsBox {
   }
 
   .stageSizerTop {
+    align-items: flex-start;
+  }
+
+  .stageSizerMeta {
     align-items: flex-start;
   }
 }

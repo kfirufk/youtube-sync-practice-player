@@ -319,6 +319,7 @@ body[data-theme="light"] .siteHeader {
 .workspaceHeader,
 .cardHeader,
 .lyricsHeader,
+.practiceHelperHeader,
 .modalHead,
 .transportTop,
 .playerHeading {
@@ -330,7 +331,8 @@ body[data-theme="light"] .siteHeader {
 
 .sectionHeader h2,
 .workspaceHeader h2,
-.lyricsHeader h3 {
+.lyricsHeader h3,
+.practiceHelperHeader h3 {
   margin: 0 0 4px;
 }
 
@@ -377,7 +379,8 @@ body[data-theme="light"] .siteHeader {
 
 .card,
 .transport,
-.lyricsSection {
+.lyricsSection,
+.practiceHelperSection {
   background: var(--panel-strong);
   border: 1px solid var(--panel-border);
   border-radius: 22px;
@@ -388,7 +391,8 @@ body[data-theme="light"] .siteHeader {
 .card h3,
 .card h4,
 .transport h3,
-.lyricsSection h3 {
+.lyricsSection h3,
+.practiceHelperSection h3 {
   margin: 0 0 12px;
 }
 
@@ -767,6 +771,14 @@ input[type="range"] {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;
   gap: 12px;
+  min-width: 0;
+}
+
+.practiceHelperSection {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .lyricsBox {
@@ -782,6 +794,7 @@ input[type="range"] {
 .practiceHelper {
   display: grid;
   gap: 10px;
+  min-height: 0;
 }
 
 .helperBlock {
@@ -1248,8 +1261,10 @@ body[data-screen="practice"] .playerSurface {
 
 body.practice-mode .transport,
 body.practice-mode .lyricsSection,
+body.practice-mode .practiceHelperSection,
 body[data-screen="practice"] .transport,
-body[data-screen="practice"] .lyricsSection {
+body[data-screen="practice"] .lyricsSection,
+body[data-screen="practice"] .practiceHelperSection {
   padding: 10px;
 }
 
@@ -1271,7 +1286,9 @@ body[data-screen="practice"] .stageSizer {
 }
 
 body.practice-mode .lyricsSection,
-body[data-screen="practice"] .lyricsSection {
+body.practice-mode .practiceHelperSection,
+body[data-screen="practice"] .lyricsSection,
+body[data-screen="practice"] .practiceHelperSection {
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -1281,9 +1298,6 @@ body[data-screen="practice"] .lyricsSection {
 body.practice-mode .lyricsPracticeGrid,
 body[data-screen="practice"] .lyricsPracticeGrid {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas:
-    "lyrics"
-    "helper";
   grid-template-rows: minmax(0, 1fr) auto;
   min-height: 0;
   height: 100%;
@@ -1291,47 +1305,41 @@ body[data-screen="practice"] .lyricsPracticeGrid {
 
 body.practice-mode .lyricsBox,
 body[data-screen="practice"] .lyricsBox {
-  grid-area: lyrics;
   min-height: 0;
   max-height: none;
-  height: auto;
+  height: 100%;
 }
 
 body.practice-mode .practiceHelper,
 body[data-screen="practice"] .practiceHelper {
-  grid-area: helper;
   align-content: start;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  overflow: auto;
 }
 
-body.practice-mode[data-practice-reference-layout="dual"] .lyricsPracticeGrid,
-body[data-screen="practice"][data-practice-reference-layout="dual"] .lyricsPracticeGrid {
-  grid-template-areas: "lyrics helper";
-  grid-template-columns: minmax(240px, 1fr) 188px;
-}
-
-body.practice-mode[data-practice-reference-layout="dual"] .practiceHelper,
-body[data-screen="practice"][data-practice-reference-layout="dual"] .practiceHelper {
-  grid-template-columns: 1fr;
-  min-height: 0;
-}
-
-body.practice-mode[data-practice-reference-layout="dual"] .shortcutSummary,
-body.practice-mode[data-practice-reference-layout="dual"] .markerJumpLegend,
-body[data-screen="practice"][data-practice-reference-layout="dual"] .shortcutSummary,
-body[data-screen="practice"][data-practice-reference-layout="dual"] .markerJumpLegend {
-  grid-template-columns: 1fr;
-}
-
-body.practice-mode[data-practice-reference-layout="dual"] .lyricsBox,
-body[data-screen="practice"][data-practice-reference-layout="dual"] .lyricsBox {
-  height: 100%;
-}
-
-body.practice-mode[data-practice-layout="split"] .lyricsSection,
-body[data-screen="practice"][data-practice-layout="split"] .lyricsSection {
+body.practice-mode[data-practice-layout="split"] .lyricsPracticeGrid,
+body[data-screen="practice"][data-practice-layout="split"] .lyricsPracticeGrid {
   position: sticky;
   top: 8px;
+}
+
+body.practice-mode[data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .lyricsPracticeGrid,
+body[data-screen="practice"][data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .lyricsPracticeGrid {
+  grid-template-columns: minmax(0, 1fr) 188px;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+body.practice-mode[data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .practiceHelper,
+body[data-screen="practice"][data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .practiceHelper {
+  grid-template-columns: 1fr;
+}
+
+body.practice-mode[data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .shortcutSummary,
+body.practice-mode[data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .markerJumpLegend,
+body[data-screen="practice"][data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .shortcutSummary,
+body[data-screen="practice"][data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .markerJumpLegend {
+  grid-template-columns: 1fr;
 }
 
 body.practice-mode .helperBlock,
@@ -1408,6 +1416,7 @@ body.lyrics-focus .lyricsBox {
   .sectionHeader,
   .workspaceHeader,
   .lyricsHeader,
+  .practiceHelperHeader,
   .practiceContextBar {
     grid-template-columns: 1fr;
     display: grid;
@@ -1441,7 +1450,8 @@ body.lyrics-focus .lyricsBox {
   .heroPanel,
   .card,
   .transport,
-  .lyricsSection {
+  .lyricsSection,
+  .practiceHelperSection {
     border-radius: 18px;
     padding: 14px;
   }

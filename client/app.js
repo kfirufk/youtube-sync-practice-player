@@ -110,6 +110,7 @@ const dom = {
   practiceShortcutSummary: el("practiceShortcutSummary"),
   markerJumpLegend: el("markerJumpLegend"),
   togglePracticeHelperBtn: el("togglePracticeHelperBtn"),
+  practiceHelperSection: el("practiceHelperSection"),
   practiceHelper: el("practiceHelper"),
   practiceModeBtn: el("practiceModeBtn"),
   playerSurface: el("playerSurface"),
@@ -119,6 +120,7 @@ const dom = {
   practiceLayoutStatus: el("practiceLayoutStatus"),
   practiceLayoutBadge: el("practiceLayoutBadge"),
   resetPracticeStageBtn: el("resetPracticeStageBtn"),
+  practiceReferenceRail: el("practiceReferenceRail"),
   lyricsSection: el("lyricsSection"),
   lyricsFocusBtn: el("lyricsFocusBtn"),
   lyricsBox: el("lyricsBox"),
@@ -649,10 +651,12 @@ function renderPracticeContext() {
 function clearPracticeLayoutStyles() {
   delete document.body.dataset.practiceLayout;
   delete document.body.dataset.practiceReferenceLayout;
+  delete document.body.dataset.practiceHelperVisible;
   dom.playerSurface.style.gridTemplateColumns = "";
   dom.playerSurface.style.minHeight = "";
   dom.practiceStage.style.width = "";
   dom.practiceStage.style.maxWidth = "";
+  dom.practiceReferenceRail.style.height = "";
   dom.lyricsSection.style.height = "";
   document.documentElement.style.removeProperty("--practice-player-min");
   dom.practiceStageBalance.value = String(app.practiceLayout.autoBalance || 54);
@@ -778,7 +782,13 @@ function applyPracticeLayout(forceAuto = false) {
   dom.practiceStage.style.maxWidth = `${Math.max(360, stageWidth)}px`;
   dom.playerSurface.style.gridTemplateColumns = gridTemplateColumns;
   dom.playerSurface.style.minHeight = `${availableHeight}px`;
-  dom.lyricsSection.style.height = `${Math.max(140, lyricsHeight)}px`;
+  if (split) {
+    dom.practiceReferenceRail.style.height = `${Math.max(140, lyricsHeight)}px`;
+    dom.lyricsSection.style.height = "100%";
+  } else {
+    dom.practiceReferenceRail.style.height = "";
+    dom.lyricsSection.style.height = `${Math.max(140, lyricsHeight)}px`;
+  }
   dom.practiceStageBalance.value = String(balance);
   dom.practiceLayoutStatus.textContent = describePracticeLayout(mode, balance, app.practiceLayout.manual);
   dom.practiceLayoutBadge.textContent = getPracticeEmphasis(balance);
@@ -1339,7 +1349,8 @@ function renderPracticeHelper() {
 }
 
 function renderPracticeHelperVisibility() {
-  dom.practiceHelper.classList.toggle("hidden", !app.practiceHelperVisible);
+  document.body.dataset.practiceHelperVisible = app.practiceHelperVisible ? "visible" : "hidden";
+  dom.practiceHelperSection.classList.toggle("hidden", !app.practiceHelperVisible);
   dom.togglePracticeHelperBtn.textContent = app.practiceHelperVisible ? "Hide helper" : "Show helper";
   schedulePracticeLayout();
 }

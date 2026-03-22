@@ -443,20 +443,29 @@
           </section>
         </div>
 
-        <section id="lyricsSection" class="lyricsSection card">
-          <div class="lyricsHeader">
-            <div>
-              <p class="eyebrow">Practice</p>
-              <h3>Lyrics &amp; shortcut helper</h3>
+        <div id="practiceReferenceRail" class="lyricsPracticeGrid">
+          <section id="lyricsSection" class="lyricsSection card">
+            <div class="lyricsHeader">
+              <div>
+                <p class="eyebrow">Practice</p>
+                <h3>Lyrics</h3>
+              </div>
+              <div class="row">
+                <button id="practiceModeBtn" class="secondary" type="button">Open fullscreen practice</button>
+                <button id="togglePracticeHelperBtn" class="secondary" type="button">Hide helper</button>
+              </div>
             </div>
-            <div class="row">
-              <button id="practiceModeBtn" class="secondary" type="button">Open fullscreen practice</button>
-              <button id="togglePracticeHelperBtn" class="secondary" type="button">Hide helper</button>
-            </div>
-          </div>
 
-          <div class="lyricsPracticeGrid">
             <div id="lyricsBox" class="lyricsBox"></div>
+          </section>
+
+          <section id="practiceHelperSection" class="practiceHelperSection card">
+            <div class="practiceHelperHeader">
+              <div>
+                <p class="eyebrow">Helper</p>
+                <h3>Shortcuts &amp; jump labels</h3>
+              </div>
+            </div>
 
             <aside id="practiceHelper" class="practiceHelper">
               <div class="helperBlock">
@@ -469,8 +478,8 @@
                 <div id="markerJumpLegend" class="markerJumpLegend small muted">No labels assigned yet.</div>
               </div>
             </aside>
-          </div>
-        </section>
+          </section>
+        </div>
       </section>
     </div>
   </section>

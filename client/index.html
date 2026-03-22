@@ -381,7 +381,10 @@
                     <span id="practiceLayoutBadge" class="stageSizerBadge">Balanced</span>
                   </div>
                 </div>
-                <button id="resetPracticeStageBtn" class="secondary" type="button">Auto fit</button>
+                <div class="stageSizerActions">
+                  <button id="showPracticeHelperBtn" class="secondary hidden" type="button">Show helper</button>
+                  <button id="resetPracticeStageBtn" class="secondary" type="button">Auto fit</button>
+                </div>
               </div>
               <p class="stageSizerHint small">Drag the bar to rebalance the videos against the lyrics panel.</p>
               <input
@@ -443,45 +446,51 @@
           </section>
         </div>
 
-        <div id="practiceReferenceRail" class="lyricsPracticeGrid">
+        <div id="practiceReferenceRail" class="practiceReferenceRail">
           <section id="lyricsSection" class="lyricsSection card">
             <div class="lyricsHeader">
               <div>
                 <p class="eyebrow">Practice</p>
                 <h3>Lyrics</h3>
               </div>
-              <div class="row">
+              <div class="lyricsHeaderActions">
+                <div id="lyricsPositionControls" class="lyricsPositionControls" role="group" aria-label="Lyrics position">
+                  <button class="secondary" type="button" data-lyrics-position="left">Left</button>
+                  <button class="secondary" type="button" data-lyrics-position="right">Right</button>
+                  <button class="secondary" type="button" data-lyrics-position="top">Top</button>
+                  <button class="secondary" type="button" data-lyrics-position="bottom">Bottom</button>
+                </div>
                 <button id="practiceModeBtn" class="secondary" type="button">Open fullscreen practice</button>
               </div>
             </div>
 
             <div id="lyricsBox" class="lyricsBox"></div>
           </section>
+        </div>
 
-          <section id="practiceHelperSection" class="practiceHelperSection card">
-            <div class="practiceHelperHeader">
-              <div>
-                <p class="eyebrow">Helper</p>
-                <h3>Keyboard helper &amp; jump labels</h3>
-              </div>
-              <div class="row">
-                <button id="togglePracticeHelperBtn" class="secondary" type="button">Hide helper</button>
-              </div>
+        <section id="practiceHelperSection" class="practiceHelperSection card">
+          <div class="practiceHelperHeader">
+            <div>
+              <p class="eyebrow">Helper</p>
+              <h3>Keyboard helper &amp; jump labels</h3>
+            </div>
+            <div class="row">
+              <button id="togglePracticeHelperBtn" class="secondary" type="button">Hide helper</button>
+            </div>
+          </div>
+
+          <aside id="practiceHelper" class="practiceHelper">
+            <div class="helperBlock">
+              <h4>Practice helper</h4>
+              <div id="practiceShortcutSummary" class="shortcutSummary"></div>
             </div>
 
-            <aside id="practiceHelper" class="practiceHelper">
-              <div class="helperBlock">
-                <h4>Practice helper</h4>
-                <div id="practiceShortcutSummary" class="shortcutSummary"></div>
-              </div>
-
-              <div class="helperBlock">
-                <h4>Jump labels</h4>
-                <div id="markerJumpLegend" class="markerJumpLegend small muted">No labels assigned yet.</div>
-              </div>
-            </aside>
-          </section>
-        </div>
+            <div class="helperBlock">
+              <h4>Jump labels</h4>
+              <div id="markerJumpLegend" class="markerJumpLegend small muted">No labels assigned yet.</div>
+            </div>
+          </aside>
+        </section>
       </section>
     </div>
   </section>

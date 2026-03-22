@@ -363,6 +363,14 @@ body[data-theme="light"] .siteHeader {
   display: grid;
   gap: 14px;
   min-width: 0;
+  grid-area: stage;
+}
+
+.practiceReferenceRail {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-area: lyrics;
 }
 
 .playersCard {
@@ -591,6 +599,13 @@ button.danger {
   flex-wrap: wrap;
 }
 
+.stageSizerActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .stageSizerLabel {
   margin: 0 0 4px;
   color: var(--ink-soft);
@@ -767,14 +782,6 @@ input[type="range"] {
   margin-top: 4px;
 }
 
-.lyricsPracticeGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
-  gap: 12px;
-  min-width: 0;
-  align-items: stretch;
-}
-
 .lyricsSection,
 .practiceHelperSection {
   min-width: 0;
@@ -785,18 +792,7 @@ input[type="range"] {
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
-}
-
-.practiceHelperSection.practiceHelperCollapsed {
-  grid-template-rows: auto;
-}
-
-.practiceHelperSection.practiceHelperCollapsed .practiceHelperHeader {
-  justify-content: flex-end;
-}
-
-.practiceHelperSection.practiceHelperCollapsed .practiceHelperHeader > div:first-child {
-  display: none;
+  grid-area: helper;
 }
 
 .lyricsBox {
@@ -807,8 +803,11 @@ input[type="range"] {
   border-radius: 18px;
   border: 1px solid var(--panel-border);
   background: var(--input-bg);
-  font-size: 0.92rem;
-  line-height: 1.38;
+  font-size: var(--practice-lyrics-font-size, 0.92rem);
+  line-height: var(--practice-lyrics-line-height, 1.38);
+  column-count: var(--practice-lyrics-columns, 1);
+  column-gap: 14px;
+  column-fill: auto;
 }
 
 .practiceHelper {
@@ -846,10 +845,37 @@ input[type="range"] {
 
 .line {
   break-inside: avoid;
+  -webkit-column-break-inside: avoid;
   margin: 0 0 6px;
   padding: 7px 9px;
   border-radius: 10px;
   line-height: 1.35;
+}
+
+.lyricsHeaderActions {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.lyricsHeaderActions > button {
+  justify-self: end;
+}
+
+.lyricsPositionControls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.lyricsPositionControls button {
+  min-width: 64px;
+  padding: 9px 11px;
+}
+
+.lyricsPositionControls button.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
 }
 
 .line.active {
@@ -1281,6 +1307,12 @@ body[data-screen="practice"] .playerSurface {
   align-items: start;
 }
 
+body.practice-mode .practiceReferenceRail,
+body[data-screen="practice"] .practiceReferenceRail {
+  min-height: 0;
+  display: grid;
+}
+
 body.practice-mode .transport,
 body.practice-mode .lyricsSection,
 body.practice-mode .practiceHelperSection,
@@ -1317,12 +1349,9 @@ body[data-screen="practice"] .practiceHelperSection {
   overflow: hidden;
 }
 
-body.practice-mode .lyricsPracticeGrid,
-body[data-screen="practice"] .lyricsPracticeGrid {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
+body.practice-mode .practiceReferenceRail,
+body[data-screen="practice"] .practiceReferenceRail {
   min-height: 0;
-  height: 100%;
 }
 
 body.practice-mode .lyricsBox,
@@ -1331,8 +1360,6 @@ body[data-screen="practice"] .lyricsBox {
   max-height: none;
   height: 100%;
   padding: 10px 12px;
-  font-size: clamp(0.76rem, 0.72rem + 0.2vw, 0.9rem);
-  line-height: 1.3;
 }
 
 body.practice-mode .practiceHelper,
@@ -1342,43 +1369,15 @@ body[data-screen="practice"] .practiceHelper {
   overflow: auto;
 }
 
-body.practice-mode[data-practice-layout="split"] .lyricsPracticeGrid,
-body[data-screen="practice"][data-practice-layout="split"] .lyricsPracticeGrid {
-  position: sticky;
-  top: 8px;
-  align-self: start;
-}
-
-body.practice-mode[data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .lyricsPracticeGrid,
-body[data-screen="practice"][data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .lyricsPracticeGrid {
-  grid-template-columns: minmax(0, 1.5fr) minmax(220px, 248px);
-  grid-template-rows: minmax(0, 1fr);
-  align-items: stretch;
-}
-
-body.practice-mode[data-practice-reference-layout="dual"][data-practice-helper-visible="hidden"] .lyricsPracticeGrid,
-body[data-screen="practice"][data-practice-reference-layout="dual"][data-practice-helper-visible="hidden"] .lyricsPracticeGrid {
-  grid-template-columns: minmax(0, 1fr) 118px;
-  grid-template-rows: minmax(0, 1fr);
-  align-items: stretch;
-}
-
-body.practice-mode[data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .practiceHelper,
-body[data-screen="practice"][data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .practiceHelper {
+body.practice-mode[data-practice-reference-layout="side"] .practiceHelper,
+body[data-screen="practice"][data-practice-reference-layout="side"] .practiceHelper {
   grid-template-columns: 1fr;
 }
 
-body.practice-mode[data-practice-reference-layout="dual"] .lyricsBox,
-body[data-screen="practice"][data-practice-reference-layout="dual"] .lyricsBox {
-  column-count: 2;
-  column-gap: 14px;
-  column-fill: balance;
-}
-
-body.practice-mode[data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .shortcutSummary,
-body.practice-mode[data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .markerJumpLegend,
-body[data-screen="practice"][data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .shortcutSummary,
-body[data-screen="practice"][data-practice-reference-layout="dual"][data-practice-helper-visible="visible"] .markerJumpLegend {
+body.practice-mode[data-practice-reference-layout="side"] .shortcutSummary,
+body.practice-mode[data-practice-reference-layout="side"] .markerJumpLegend,
+body[data-screen="practice"][data-practice-reference-layout="side"] .shortcutSummary,
+body[data-screen="practice"][data-practice-reference-layout="side"] .markerJumpLegend {
   grid-template-columns: 1fr;
 }
 
@@ -1438,8 +1437,7 @@ body.lyrics-focus .lyricsBox {
 
 @media (max-width: 1180px) {
   .workspaceGrid,
-  .heroPanel,
-  .lyricsPracticeGrid {
+  .heroPanel {
     grid-template-columns: 1fr;
   }
 
@@ -1485,9 +1483,17 @@ body.lyrics-focus .lyricsBox {
     justify-content: flex-start;
   }
 
-  body.practice-mode .lyricsBox,
-  body[data-screen="practice"] .lyricsBox {
-    column-count: 1;
+  .lyricsHeaderActions {
+    justify-items: start;
+  }
+
+  .lyricsHeaderActions > button {
+    justify-self: start;
+  }
+
+  .lyricsPositionControls,
+  .stageSizerActions {
+    justify-content: flex-start;
   }
 }
 

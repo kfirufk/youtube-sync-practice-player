@@ -13,6 +13,7 @@ const MARKER_JUMP_POOL = [
   "-", "=", "Q", "W", "E", "Y", "U", "I", "O", "P",
   "[", "]", "A", "S", "D", "G", "H", "J", "K", ";"
 ];
+const LYRICS_POSITIONS = ["left", "right", "top", "bottom"];
 
 const PLAYER_STATUS_LABELS = {
   idle: "Not loaded",
@@ -120,8 +121,10 @@ const dom = {
   practiceLayoutStatus: el("practiceLayoutStatus"),
   practiceLayoutBadge: el("practiceLayoutBadge"),
   resetPracticeStageBtn: el("resetPracticeStageBtn"),
+  showPracticeHelperBtn: el("showPracticeHelperBtn"),
   practiceReferenceRail: el("practiceReferenceRail"),
   lyricsSection: el("lyricsSection"),
+  lyricsPositionControls: el("lyricsPositionControls"),
   lyricsFocusBtn: el("lyricsFocusBtn"),
   lyricsBox: el("lyricsBox"),
   timeLabel: el("timeLabel"),
@@ -198,7 +201,8 @@ const app = {
     manual: false,
     balance: 54,
     autoBalance: 54,
-    mode: "stack"
+    mode: "stack",
+    lyricsPosition: "left"
   },
   playerUiState: {
     song: { hasStartedPlayback: false },
@@ -236,6 +240,7 @@ let lastPianoCorrectionAt = 0;
 let lastActiveLyricIndex = -1;
 let autosaveTimer = null;
 let practiceLayoutFrame = 0;
+let lyricsFitFrame = 0;
 
 class MetronomeEngine {
   constructor() {
@@ -648,20 +653,43 @@ function renderPracticeContext() {
     : `Created by ${owner}. This song is available for practice, while editing stays locked to its creator.`;
 }
 
+function normalizeLyricsPosition(position) {
+  return LYRICS_POSITIONS.includes(position) ? position : "left";
+}
+
+function renderLyricsPositionControls() {
+  const active = normalizeLyricsPosition(app.practiceLayout.lyricsPosition);
+  if (!dom.lyricsPositionControls) return;
+  for (const button of dom.lyricsPositionControls.querySelectorAll("[data-lyrics-position]")) {
+    const selected = button.dataset.lyricsPosition === active;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  }
+}
+
 function clearPracticeLayoutStyles() {
   delete document.body.dataset.practiceLayout;
   delete document.body.dataset.practiceReferenceLayout;
   delete document.body.dataset.practiceHelperVisible;
+  delete document.body.dataset.practiceLyricsPosition;
   dom.playerSurface.style.gridTemplateColumns = "";
+  dom.playerSurface.style.gridTemplateRows = "";
+  dom.playerSurface.style.gridTemplateAreas = "";
   dom.playerSurface.style.minHeight = "";
   dom.practiceStage.style.width = "";
   dom.practiceStage.style.maxWidth = "";
   dom.practiceReferenceRail.style.height = "";
   dom.lyricsSection.style.height = "";
+  dom.lyricsBox.style.removeProperty("--practice-lyrics-font-size");
+  dom.lyricsBox.style.removeProperty("--practice-lyrics-line-height");
+  dom.lyricsBox.style.removeProperty("--practice-lyrics-columns");
+  dom.showPracticeHelperBtn.classList.add("hidden");
   document.documentElement.style.removeProperty("--practice-player-min");
   dom.practiceStageBalance.value = String(app.practiceLayout.autoBalance || 54);
   dom.practiceLayoutStatus.textContent = "Auto fit will tune the stage to your window.";
   dom.practiceLayoutBadge.textContent = "Balanced";
+  if (lyricsFitFrame) cancelAnimationFrame(lyricsFitFrame);
+  lyricsFitFrame = 0;
 }
 
 function estimatePracticeVideoHeight(stageWidth) {
@@ -685,20 +713,107 @@ function computeAutoPracticeBalance(viewportWidth, viewportHeight) {
 
 function describePracticeLayout(mode, balance, manual) {
   const emphasis = getPracticeEmphasis(balance).toLowerCase();
+  const position = normalizeLyricsPosition(app.practiceLayout.lyricsPosition);
+  const placement = `lyrics ${position}`;
   const layout = mode === "split"
     ? "split view"
     : mode === "compact"
       ? "compact stack"
       : "stacked view";
   return manual
-    ? `Manual ${emphasis} ${layout}. Auto fit will snap it back to the window.`
-    : `Auto-fit ${layout} with a ${emphasis} stage.`;
+    ? `Manual ${emphasis} ${layout}, ${placement}. Auto fit will snap it back to the window.`
+    : `Auto-fit ${layout}, ${placement}, with a ${emphasis} stage.`;
 }
 
 function getPracticeEmphasis(balance) {
   if (balance <= 45) return "Lyrics-first";
   if (balance >= 64) return "Video-first";
   return "Balanced";
+}
+
+function getLyricsFitRange(position, boxWidth, lineCount) {
+  let maxColumns = 1;
+  if (position === "top" || position === "bottom") {
+    if (boxWidth >= 1080) maxColumns = 3;
+    else if (boxWidth >= 700) maxColumns = 2;
+  } else if (boxWidth >= 760) {
+    maxColumns = 2;
+  }
+
+  const densityOffset = lineCount > 90
+    ? 3
+    : lineCount > 65
+      ? 2
+      : lineCount > 40
+        ? 1
+        : 0;
+  const preferredFontPx = clamp(
+    (position === "top" || position === "bottom" ? 15 : 14) - densityOffset,
+    10,
+    16
+  );
+
+  return {
+    maxColumns,
+    preferredFontPx,
+    minFontPx: boxWidth < 540 ? 9 : 9.5
+  };
+}
+
+function applyLyricsFit(fontPx, columns) {
+  dom.lyricsBox.style.setProperty("--practice-lyrics-font-size", `${fontPx}px`);
+  dom.lyricsBox.style.setProperty("--practice-lyrics-line-height", fontPx <= 10.5 ? "1.16" : fontPx <= 12 ? "1.2" : "1.26");
+  dom.lyricsBox.style.setProperty("--practice-lyrics-columns", String(columns));
+}
+
+function fitLyricsToViewport() {
+  if (app.screen !== "practice" || !dom.lyricsBox || !app.lyrics.length) {
+    dom.lyricsBox.style.removeProperty("--practice-lyrics-font-size");
+    dom.lyricsBox.style.removeProperty("--practice-lyrics-line-height");
+    dom.lyricsBox.style.removeProperty("--practice-lyrics-columns");
+    return;
+  }
+
+  const boxWidth = dom.lyricsBox.clientWidth;
+  const boxHeight = dom.lyricsBox.clientHeight;
+  if (!boxWidth || !boxHeight) return;
+
+  const position = normalizeLyricsPosition(app.practiceLayout.lyricsPosition);
+  const lines = dom.lyricsBox.querySelectorAll(".line").length;
+  const { maxColumns, preferredFontPx, minFontPx } = getLyricsFitRange(position, boxWidth, lines);
+
+  let best = { fits: false, fontPx: minFontPx, columns: 1, overflow: Number.POSITIVE_INFINITY };
+
+  for (let columns = 1; columns <= maxColumns; columns += 1) {
+    for (let fontPx = preferredFontPx; fontPx >= minFontPx; fontPx -= 0.5) {
+      applyLyricsFit(fontPx, columns);
+      const overflowHeight = Math.max(0, dom.lyricsBox.scrollHeight - dom.lyricsBox.clientHeight);
+      const overflowWidth = Math.max(0, dom.lyricsBox.scrollWidth - dom.lyricsBox.clientWidth);
+      const fits = overflowHeight <= 1 && overflowWidth <= 1;
+      const overflow = overflowHeight + overflowWidth;
+
+      if (fits) {
+        if (!best.fits || fontPx > best.fontPx || (fontPx === best.fontPx && columns < best.columns)) {
+          best = { fits: true, fontPx, columns, overflow: 0 };
+        }
+        break;
+      }
+
+      if (!best.fits && overflow < best.overflow) {
+        best = { fits: false, fontPx, columns, overflow };
+      }
+    }
+  }
+
+  applyLyricsFit(best.fontPx, best.columns);
+}
+
+function scheduleLyricsFit() {
+  if (lyricsFitFrame) cancelAnimationFrame(lyricsFitFrame);
+  lyricsFitFrame = window.requestAnimationFrame(() => {
+    lyricsFitFrame = 0;
+    fitLyricsToViewport();
+  });
 }
 
 function applyPracticeLayout(forceAuto = false) {
@@ -721,80 +836,152 @@ function applyPracticeLayout(forceAuto = false) {
 
   const balance = clamp(Math.round(ensureNumber(app.practiceLayout.balance, autoBalance)), 34, 74);
   const normalized = (balance - 34) / 40;
-  const split = viewportWidth >= 1220 && availableHeight >= 560;
-  const mode = split ? "split" : (viewportWidth < 800 || availableHeight < 560 ? "compact" : "stack");
+  const helperVisible = app.practiceHelperVisible;
+  const lyricsPosition = normalizeLyricsPosition(app.practiceLayout.lyricsPosition);
+  const sidePlacement = (lyricsPosition === "left" || lyricsPosition === "right") && viewportWidth >= 1180 && availableHeight >= 560;
+  const stackedPlacement = (lyricsPosition === "top" || lyricsPosition === "bottom") && viewportWidth >= 980 && availableHeight >= 620;
+  const mode = sidePlacement ? "split" : (viewportWidth < 800 || availableHeight < 560 ? "compact" : "stack");
 
   let gridTemplateColumns = "minmax(0, 1fr)";
+  let gridTemplateRows = "auto";
+  let gridTemplateAreas = helperVisible ? "\"stage\" \"lyrics\" \"helper\"" : "\"stage\" \"lyrics\"";
   let stageWidth;
   let lyricsHeight;
   let playerMin;
   let referenceLayout = "stacked";
 
-  if (split) {
-    const ultraWide = viewportWidth >= 1680;
-    const referenceMin = ultraWide ? 620 : (viewportWidth < 1360 ? 540 : 580);
-    const referenceMax = Math.min(
-      ultraWide ? 860 : (viewportWidth < 1360 ? 680 : 760),
-      Math.max(referenceMin, Math.round(viewportWidth * (ultraWide ? 0.5 : 0.48)))
-    );
-    const referenceWidth = clamp(Math.round(referenceMax - normalized * 110), referenceMin, referenceMax);
-    const horizontalLimit = Math.max(600, viewportWidth - referenceWidth - 56);
+  if (sidePlacement) {
+    const helperWidth = helperVisible ? clamp(Math.round(viewportWidth * 0.17), 220, 260) : 0;
+    const mainWidth = Math.max(920, viewportWidth - helperWidth - (helperVisible ? 52 : 24));
     const reservedTransport = 214;
     const reservedSizer = 96;
     const videoHeightBudget = Math.max(210, availableHeight - reservedTransport - reservedSizer - 24);
     const heightLimitedStage = Math.round(videoHeightBudget * (32 / 9) + 14);
-    const stageMin = Math.min(horizontalLimit, viewportWidth < 1440 ? 640 : 780);
+    const minLyricsWidth = viewportWidth >= 1500 ? 430 : 350;
+    const maxLyricsWidth = Math.min(
+      viewportWidth >= 1500 ? 680 : 560,
+      Math.max(minLyricsWidth, Math.round(mainWidth * 0.46))
+    );
+    let lyricsWidth = clamp(Math.round(maxLyricsWidth - normalized * 140), minLyricsWidth, maxLyricsWidth);
+    const horizontalLimit = Math.max(560, mainWidth - lyricsWidth - 14);
+    const stageMin = Math.min(horizontalLimit, viewportWidth < 1440 ? 620 : 760);
     const stageMax = Math.max(stageMin, Math.min(horizontalLimit, heightLimitedStage, 1700));
 
     stageWidth = Math.round(stageMin + normalized * (stageMax - stageMin));
+    lyricsWidth = Math.max(minLyricsWidth, mainWidth - Math.min(stageWidth, horizontalLimit) - 14);
     lyricsHeight = availableHeight;
     playerMin = viewportWidth < 1360 ? 216 : 248;
-    gridTemplateColumns = `minmax(0, 1fr) minmax(${referenceWidth}px, ${referenceWidth}px)`;
-    referenceLayout = referenceWidth >= 600 && availableHeight >= 620 ? "dual" : "stacked";
+    referenceLayout = "side";
+    if (helperVisible) {
+      gridTemplateColumns = lyricsPosition === "left"
+        ? `minmax(${lyricsWidth}px, ${lyricsWidth}px) minmax(0, 1fr) minmax(${helperWidth}px, ${helperWidth}px)`
+        : `minmax(0, 1fr) minmax(${lyricsWidth}px, ${lyricsWidth}px) minmax(${helperWidth}px, ${helperWidth}px)`;
+      gridTemplateAreas = lyricsPosition === "left"
+        ? "\"lyrics stage helper\""
+        : "\"stage lyrics helper\"";
+    } else {
+      gridTemplateColumns = lyricsPosition === "left"
+        ? `minmax(${lyricsWidth}px, ${lyricsWidth}px) minmax(0, 1fr)`
+        : `minmax(0, 1fr) minmax(${lyricsWidth}px, ${lyricsWidth}px)`;
+      gridTemplateAreas = lyricsPosition === "left"
+        ? "\"lyrics stage\""
+        : "\"stage lyrics\"";
+    }
+    gridTemplateRows = "minmax(0, 1fr)";
+  } else if (stackedPlacement) {
+    const helperWidth = helperVisible ? clamp(Math.round(viewportWidth * 0.16), 210, 250) : 0;
+    const mainWidth = Math.max(700, viewportWidth - helperWidth - (helperVisible ? 52 : 24));
+    const reservedTransport = 214;
+    const reservedSizer = 96;
+    const minLyricsHeight = 190;
+    lyricsHeight = clamp(
+      Math.round(availableHeight * (0.22 + (1 - normalized) * 0.18)),
+      minLyricsHeight,
+      360
+    );
+    const videoHeightBudget = Math.max(210, availableHeight - lyricsHeight - reservedTransport - reservedSizer - 32);
+    const horizontalLimit = Math.max(560, mainWidth);
+    const heightLimitedStage = Math.round(videoHeightBudget * (32 / 9) + 14);
+    stageWidth = Math.min(horizontalLimit, heightLimitedStage, 1500);
+    playerMin = viewportWidth < 1200 ? 220 : 248;
+    referenceLayout = "wide";
+    gridTemplateColumns = helperVisible
+      ? `minmax(0, 1fr) minmax(${helperWidth}px, ${helperWidth}px)`
+      : "minmax(0, 1fr)";
+    if (lyricsPosition === "top") {
+      gridTemplateRows = `${Math.max(160, lyricsHeight)}px minmax(0, 1fr)`;
+      gridTemplateAreas = helperVisible
+        ? "\"lyrics helper\" \"stage helper\""
+        : "\"lyrics\" \"stage\"";
+    } else {
+      gridTemplateRows = `minmax(0, 1fr) ${Math.max(160, lyricsHeight)}px`;
+      gridTemplateAreas = helperVisible
+        ? "\"stage helper\" \"lyrics helper\""
+        : "\"stage\" \"lyrics\"";
+    }
   } else {
     const reservedTransport = mode === "compact" ? 186 : 202;
     const reservedSizer = 96;
+    const helperReserve = helperVisible ? (mode === "compact" ? 132 : 160) : 0;
     const minLyricsHeight = mode === "compact" ? 150 : 210;
     const targetLyricsHeight = clamp(
-      Math.round(availableHeight * (mode === "compact" ? 0.29 : 0.38)),
+      Math.round(availableHeight * (mode === "compact" ? 0.28 : 0.34)),
       minLyricsHeight,
-      mode === "compact" ? 250 : 380
+      mode === "compact" ? 250 : 340
     );
-    const videoHeightBudget = Math.max(150, availableHeight - targetLyricsHeight - reservedTransport - reservedSizer - 42);
+    const videoHeightBudget = Math.max(150, availableHeight - targetLyricsHeight - helperReserve - reservedTransport - reservedSizer - 42);
     const horizontalLimit = Math.max(420, viewportWidth - 28);
     const heightLimitedStage = Math.round(videoHeightBudget * (32 / 9) + 14);
-    const stageMin = Math.min(horizontalLimit, mode === "compact" ? 480 : 640);
+    const stageMin = Math.min(horizontalLimit, mode === "compact" ? 480 : 620);
     const stageMax = Math.max(stageMin, Math.min(horizontalLimit, heightLimitedStage));
 
     stageWidth = Math.round(stageMin + normalized * (stageMax - stageMin));
     const videoHeight = estimatePracticeVideoHeight(stageWidth);
     lyricsHeight = clamp(
-      availableHeight - videoHeight - reservedTransport - reservedSizer - 42,
+      availableHeight - videoHeight - helperReserve - reservedTransport - reservedSizer - 42,
       minLyricsHeight,
-      mode === "compact" ? 260 : 420
+      mode === "compact" ? 250 : 360
     );
-    playerMin = mode === "compact" ? 200 : 240;
+    playerMin = mode === "compact" ? 200 : 236;
+    referenceLayout = "stacked";
+    gridTemplateColumns = "minmax(0, 1fr)";
+    if (lyricsPosition === "left" || lyricsPosition === "top") {
+      gridTemplateRows = helperVisible
+        ? `${Math.max(150, lyricsHeight)}px auto auto`
+        : `${Math.max(150, lyricsHeight)}px auto`;
+      gridTemplateAreas = helperVisible
+        ? "\"lyrics\" \"stage\" \"helper\""
+        : "\"lyrics\" \"stage\"";
+    } else {
+      gridTemplateRows = helperVisible
+        ? `auto ${Math.max(150, lyricsHeight)}px auto`
+        : `auto ${Math.max(150, lyricsHeight)}px`;
+      gridTemplateAreas = helperVisible
+        ? "\"stage\" \"lyrics\" \"helper\""
+        : "\"stage\" \"lyrics\"";
+    }
   }
 
   app.practiceLayout.balance = balance;
   app.practiceLayout.mode = mode;
+  app.practiceLayout.lyricsPosition = lyricsPosition;
   document.body.dataset.practiceLayout = mode;
   document.body.dataset.practiceReferenceLayout = referenceLayout;
+  document.body.dataset.practiceLyricsPosition = lyricsPosition;
   document.documentElement.style.setProperty("--practice-player-min", `${playerMin}px`);
   dom.practiceStage.style.width = "100%";
   dom.practiceStage.style.maxWidth = `${Math.max(360, stageWidth)}px`;
   dom.playerSurface.style.gridTemplateColumns = gridTemplateColumns;
+  dom.playerSurface.style.gridTemplateRows = gridTemplateRows;
+  dom.playerSurface.style.gridTemplateAreas = gridTemplateAreas;
   dom.playerSurface.style.minHeight = `${availableHeight}px`;
-  if (split) {
-    dom.practiceReferenceRail.style.height = `${Math.max(140, lyricsHeight)}px`;
-    dom.lyricsSection.style.height = "100%";
-  } else {
-    dom.practiceReferenceRail.style.height = "";
-    dom.lyricsSection.style.height = `${Math.max(140, lyricsHeight)}px`;
-  }
+  dom.practiceReferenceRail.style.height = `${Math.max(140, lyricsHeight)}px`;
+  dom.lyricsSection.style.height = "100%";
   dom.practiceStageBalance.value = String(balance);
   dom.practiceLayoutStatus.textContent = describePracticeLayout(mode, balance, app.practiceLayout.manual);
   dom.practiceLayoutBadge.textContent = getPracticeEmphasis(balance);
+  renderLyricsPositionControls();
+  scheduleLyricsFit();
 }
 
 function schedulePracticeLayout(forceAuto = false) {
@@ -838,6 +1025,8 @@ function renderShell() {
   dom.practiceModeBtn.textContent = "Open fullscreen practice";
   renderCreateActions();
   renderPracticeContext();
+  renderLyricsPositionControls();
+  renderPracticeHelperVisibility();
   schedulePracticeLayout();
 }
 
@@ -1352,10 +1541,12 @@ function renderPracticeHelper() {
 }
 
 function renderPracticeHelperVisibility() {
+  const shouldHideHelper = app.screen === "practice" && !app.practiceHelperVisible;
   document.body.dataset.practiceHelperVisible = app.practiceHelperVisible ? "visible" : "hidden";
-  dom.practiceHelperSection.classList.toggle("practiceHelperCollapsed", !app.practiceHelperVisible);
-  dom.practiceHelper.classList.toggle("hidden", !app.practiceHelperVisible);
-  dom.togglePracticeHelperBtn.textContent = app.practiceHelperVisible ? "Hide helper" : "Show helper";
+  dom.practiceHelperSection.classList.toggle("hidden", shouldHideHelper);
+  dom.showPracticeHelperBtn.classList.toggle("hidden", app.screen !== "practice" || app.practiceHelperVisible);
+  dom.togglePracticeHelperBtn.classList.toggle("hidden", app.screen !== "practice");
+  dom.togglePracticeHelperBtn.textContent = "Hide helper";
   schedulePracticeLayout();
 }
 
@@ -1392,6 +1583,7 @@ function renderLyrics() {
   dom.lyricsBox.innerHTML = "";
   if (!app.lyrics.length) {
     dom.lyricsBox.innerHTML = '<div class="small muted">No lyrics loaded yet.</div>';
+    scheduleLyricsFit();
     return;
   }
   for (const [idx, line] of app.lyrics.entries()) {
@@ -1402,6 +1594,7 @@ function renderLyrics() {
     dom.lyricsBox.appendChild(div);
   }
   lastActiveLyricIndex = -1;
+  scheduleLyricsFit();
 }
 
 function setActiveLyricByTime(timeSec) {
@@ -2540,11 +2733,24 @@ function bindEvents() {
     app.practiceLayout.manual = false;
     schedulePracticeLayout(true);
   });
+  dom.showPracticeHelperBtn.addEventListener("click", () => {
+    app.practiceHelperVisible = true;
+    dom.showPracticeShortcutLegend.value = "true";
+    renderPracticeHelperVisibility();
+    scheduleAutosave();
+  });
   dom.togglePracticeHelperBtn.addEventListener("click", () => {
     app.practiceHelperVisible = !app.practiceHelperVisible;
     dom.showPracticeShortcutLegend.value = String(app.practiceHelperVisible);
     renderPracticeHelperVisibility();
     scheduleAutosave();
+  });
+  dom.lyricsPositionControls.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-lyrics-position]");
+    if (!button) return;
+    app.practiceLayout.lyricsPosition = normalizeLyricsPosition(button.dataset.lyricsPosition);
+    renderLyricsPositionControls();
+    schedulePracticeLayout();
   });
   dom.deleteAccountBtn.addEventListener("click", deleteAccount);
   if (!window.syncConsent) {

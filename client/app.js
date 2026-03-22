@@ -721,7 +721,7 @@ function applyPracticeLayout(forceAuto = false) {
 
   const balance = clamp(Math.round(ensureNumber(app.practiceLayout.balance, autoBalance)), 34, 74);
   const normalized = (balance - 34) / 40;
-  const split = viewportWidth >= 1040 && availableHeight >= 560;
+  const split = viewportWidth >= 1220 && availableHeight >= 560;
   const mode = split ? "split" : (viewportWidth < 800 || availableHeight < 560 ? "compact" : "stack");
 
   let gridTemplateColumns = "minmax(0, 1fr)";
@@ -731,31 +731,34 @@ function applyPracticeLayout(forceAuto = false) {
   let referenceLayout = "stacked";
 
   if (split) {
-    const ultraWide = viewportWidth >= 1550;
-    const referenceMin = ultraWide ? 440 : (viewportWidth < 1280 ? 300 : 340);
-    const referenceMax = Math.min(ultraWide ? 600 : (viewportWidth < 1280 ? 400 : 460), Math.max(referenceMin, Math.round(viewportWidth * (ultraWide ? 0.36 : 0.32))));
-    const referenceWidth = clamp(Math.round(referenceMax - normalized * 92), referenceMin, referenceMax);
-    const horizontalLimit = Math.max(680, viewportWidth - referenceWidth - 56);
+    const ultraWide = viewportWidth >= 1680;
+    const referenceMin = ultraWide ? 620 : (viewportWidth < 1360 ? 540 : 580);
+    const referenceMax = Math.min(
+      ultraWide ? 860 : (viewportWidth < 1360 ? 680 : 760),
+      Math.max(referenceMin, Math.round(viewportWidth * (ultraWide ? 0.5 : 0.48)))
+    );
+    const referenceWidth = clamp(Math.round(referenceMax - normalized * 110), referenceMin, referenceMax);
+    const horizontalLimit = Math.max(600, viewportWidth - referenceWidth - 56);
     const reservedTransport = 214;
     const reservedSizer = 96;
     const videoHeightBudget = Math.max(210, availableHeight - reservedTransport - reservedSizer - 24);
     const heightLimitedStage = Math.round(videoHeightBudget * (32 / 9) + 14);
-    const stageMin = Math.min(horizontalLimit, viewportWidth < 1280 ? 744 : 860);
+    const stageMin = Math.min(horizontalLimit, viewportWidth < 1440 ? 640 : 780);
     const stageMax = Math.max(stageMin, Math.min(horizontalLimit, heightLimitedStage, 1700));
 
     stageWidth = Math.round(stageMin + normalized * (stageMax - stageMin));
     lyricsHeight = availableHeight;
-    playerMin = viewportWidth < 1180 ? 220 : 260;
+    playerMin = viewportWidth < 1360 ? 216 : 248;
     gridTemplateColumns = `minmax(0, 1fr) minmax(${referenceWidth}px, ${referenceWidth}px)`;
-    referenceLayout = referenceWidth >= 480 && availableHeight >= 700 ? "dual" : "stacked";
+    referenceLayout = referenceWidth >= 600 && availableHeight >= 620 ? "dual" : "stacked";
   } else {
     const reservedTransport = mode === "compact" ? 186 : 202;
     const reservedSizer = 96;
     const minLyricsHeight = mode === "compact" ? 150 : 210;
     const targetLyricsHeight = clamp(
-      Math.round(availableHeight * (mode === "compact" ? 0.27 : 0.34)),
+      Math.round(availableHeight * (mode === "compact" ? 0.29 : 0.38)),
       minLyricsHeight,
-      mode === "compact" ? 230 : 320
+      mode === "compact" ? 250 : 380
     );
     const videoHeightBudget = Math.max(150, availableHeight - targetLyricsHeight - reservedTransport - reservedSizer - 42);
     const horizontalLimit = Math.max(420, viewportWidth - 28);
@@ -768,7 +771,7 @@ function applyPracticeLayout(forceAuto = false) {
     lyricsHeight = clamp(
       availableHeight - videoHeight - reservedTransport - reservedSizer - 42,
       minLyricsHeight,
-      mode === "compact" ? 240 : 360
+      mode === "compact" ? 260 : 420
     );
     playerMin = mode === "compact" ? 200 : 240;
   }
@@ -1350,7 +1353,8 @@ function renderPracticeHelper() {
 
 function renderPracticeHelperVisibility() {
   document.body.dataset.practiceHelperVisible = app.practiceHelperVisible ? "visible" : "hidden";
-  dom.practiceHelperSection.classList.toggle("hidden", !app.practiceHelperVisible);
+  dom.practiceHelperSection.classList.toggle("practiceHelperCollapsed", !app.practiceHelperVisible);
+  dom.practiceHelper.classList.toggle("hidden", !app.practiceHelperVisible);
   dom.togglePracticeHelperBtn.textContent = app.practiceHelperVisible ? "Hide helper" : "Show helper";
   schedulePracticeLayout();
 }

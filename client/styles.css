@@ -804,9 +804,9 @@ input[type="range"] {
   border: 1px solid var(--panel-border);
   background: var(--input-bg);
   font-size: var(--practice-lyrics-font-size, 0.92rem);
-  line-height: var(--practice-lyrics-line-height, 1.38);
+  line-height: var(--practice-lyrics-box-line-height, 1.24);
   column-count: var(--practice-lyrics-columns, 1);
-  column-gap: 14px;
+  column-gap: var(--practice-lyrics-column-gap, 14px);
   column-fill: auto;
 }
 
@@ -846,10 +846,15 @@ input[type="range"] {
 .line {
   break-inside: avoid;
   -webkit-column-break-inside: avoid;
-  margin: 0 0 6px;
-  padding: 7px 9px;
+  margin: 0 0 var(--practice-lyrics-row-gap, 6px);
+  padding: var(--practice-lyrics-pad-y, 7px) var(--practice-lyrics-pad-x, 9px);
   border-radius: 10px;
-  line-height: 1.35;
+  line-height: var(--practice-lyrics-line-line-height, 1.2);
+}
+
+.lyricsBox.denseLyrics .line {
+  border-radius: 8px;
+  background: rgba(8, 15, 24, 0.42);
 }
 
 .lyricsHeaderActions {
@@ -1076,6 +1081,15 @@ input[type="range"] {
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.practiceContextActions button {
+  white-space: nowrap;
+}
+
+.practiceContextActions #togglePracticeHelperBtn,
+.practiceContextActions #togglePracticeLyricsBtn {
+  min-width: 108px;
 }
 
 .exportArea {
@@ -1360,6 +1374,7 @@ body[data-screen="practice"] .lyricsBox {
   max-height: none;
   height: 100%;
   padding: 10px 12px;
+  overflow: hidden;
 }
 
 body.practice-mode .practiceHelper,

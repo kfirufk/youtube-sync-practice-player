@@ -1,4 +1,4 @@
-/* global YT, supabase, interact */
+/* global YT, supabase */
 
 const el = (id) => document.getElementById(id);
 
@@ -125,7 +125,6 @@ const dom = {
   resetPracticeStageBtn: el("resetPracticeStageBtn"),
   practiceReferenceRail: el("practiceReferenceRail"),
   lyricsSection: el("lyricsSection"),
-  lyricsResizeHandles: Array.from(document.querySelectorAll(".lyricsResizeHandle")),
   lyricsPositionControls: el("lyricsPositionControls"),
   lyricsFocusBtn: el("lyricsFocusBtn"),
   lyricsBox: el("lyricsBox"),
@@ -246,7 +245,6 @@ let autosaveTimer = null;
 let practiceLayoutFrame = 0;
 let lyricsFitFrame = 0;
 let practiceResizeObserver = null;
-let practicePaneInteractable = null;
 let practiceResizeObserverFrame = 0;
 let practiceResizeObserverAction = "";
 let lastObservedPlayerSurfaceSize = "";
@@ -752,42 +750,12 @@ function getPracticeViewportMetrics() {
   return { viewportWidth, viewportHeight, availableHeight };
 }
 
-function getPracticeResizeEdge(referenceLayout = document.body.dataset.practiceReferenceLayout || "") {
-  if (app.screen !== "practice" || !app.practiceLyricsVisible) return "";
-  const position = normalizeLyricsPosition(app.practiceLayout.lyricsPosition);
-  if ((position === "left" || position === "right") && referenceLayout !== "side") return "";
-  if (position === "left") return "right";
-  if (position === "right") return "left";
-  if (position === "top") return "bottom";
-  if (position === "bottom") return "top";
-  return "";
-}
-
-function renderPracticePaneResizer() {
-  const edge = getPracticeResizeEdge();
-  const canResize = Boolean(edge) && typeof interact === "function";
-  if (!canResize) {
-    delete document.body.dataset.practiceResizeEdge;
-    document.body.classList.remove("pane-resizing");
-    dom.lyricsSection.classList.remove("is-resizing");
-  } else {
-    document.body.dataset.practiceResizeEdge = edge;
-  }
-  for (const handle of dom.lyricsResizeHandles) {
-    const active = canResize && handle.dataset.resizeEdge === edge;
-    handle.classList.toggle("active", active);
-    handle.classList.toggle("hidden", !active);
-  }
-  syncPracticePaneInteractable(canResize ? edge : "");
-}
-
 function clearPracticeLayoutStyles() {
   delete document.body.dataset.practiceLayout;
   delete document.body.dataset.practiceReferenceLayout;
   delete document.body.dataset.practiceHelperVisible;
   delete document.body.dataset.practiceLyricsPosition;
   delete document.body.dataset.practiceLyricsVisible;
-  delete document.body.dataset.practiceResizeEdge;
   dom.playerSurface.style.gridTemplateColumns = "";
   dom.playerSurface.style.gridTemplateRows = "";
   dom.playerSurface.style.gridTemplateAreas = "";
@@ -807,12 +775,6 @@ function clearPracticeLayoutStyles() {
   dom.lyricsBox.style.removeProperty("--practice-lyrics-pad-x");
   dom.lyricsBox.style.removeProperty("--practice-lyrics-row-gap");
   dom.lyricsBox.classList.remove("denseLyrics");
-  dom.lyricsSection.classList.remove("is-resizing");
-  document.body.classList.remove("pane-resizing");
-  for (const handle of dom.lyricsResizeHandles) {
-    handle.classList.remove("active");
-    handle.classList.add("hidden");
-  }
   document.documentElement.style.removeProperty("--practice-player-min");
   dom.practiceStageBalance.value = String(app.practiceLayout.autoBalance || 54);
   dom.practiceLayoutStatus.textContent = "Auto fit will tune the stage to your window.";
@@ -822,7 +784,6 @@ function clearPracticeLayoutStyles() {
   if (practiceResizeObserverFrame) cancelAnimationFrame(practiceResizeObserverFrame);
   practiceResizeObserverFrame = 0;
   practiceResizeObserverAction = "";
-  syncPracticePaneInteractable("");
 }
 
 function estimatePracticeVideoHeight(stageWidth) {
@@ -875,19 +836,46 @@ function clearLyricsFitStyles() {
   dom.lyricsBox.style.removeProperty("--practice-lyrics-row-gap");
 }
 
-function createLyricsFitCandidate(fontPx, columns, denseMode) {
+function createLyricsFitCandidate(fontPx, columns, denseMode, options = {}) {
+  const position = normalizeLyricsPosition(options.position);
+  const boxWidth = Math.max(0, ensureNumber(options.boxWidth, 0));
+  const sidePlacement = position === "left" || position === "right";
+  const roomySide = sidePlacement && boxWidth >= 320;
+  const wideSide = sidePlacement && boxWidth >= 400;
+  const extraWideSide = sidePlacement && boxWidth >= 500;
   const tiny = fontPx <= 8.5;
   const compact = fontPx <= 10;
+  const relaxed = !denseMode && !compact && roomySide;
   return {
     fontPx,
     columns,
     denseMode,
-    boxLineHeight: denseMode ? (tiny ? 1.02 : 1.06) : (compact ? 1.08 : 1.14),
-    lineLineHeight: denseMode ? (tiny ? 1.02 : 1.06) : (compact ? 1.1 : 1.16),
-    padY: denseMode ? (tiny ? 1 : 2) : (compact ? 2 : 4),
-    padX: denseMode ? (tiny ? 4 : 5) : (compact ? 5 : 7),
-    rowGap: denseMode ? (tiny ? 1 : 2) : (compact ? 2 : 4),
-    columnGap: columns >= 3 ? 10 : 12
+    boxLineHeight: denseMode
+      ? (tiny ? 1.02 : 1.06)
+      : sidePlacement
+        ? (compact ? 1.1 : relaxed ? (extraWideSide ? 1.24 : wideSide ? 1.21 : 1.18) : 1.14)
+        : (compact ? 1.08 : 1.14),
+    lineLineHeight: denseMode
+      ? (tiny ? 1.02 : 1.06)
+      : sidePlacement
+        ? (compact ? 1.12 : relaxed ? (extraWideSide ? 1.28 : wideSide ? 1.24 : 1.2) : 1.16)
+        : (compact ? 1.1 : 1.16),
+    padY: denseMode
+      ? (tiny ? 1 : 2)
+      : sidePlacement
+        ? (compact ? 3 : extraWideSide ? 6 : wideSide ? 5 : roomySide ? 4 : 4)
+        : (compact ? 2 : 4),
+    padX: denseMode
+      ? (tiny ? 4 : 5)
+      : sidePlacement
+        ? (compact ? 6 : extraWideSide ? 11 : wideSide ? 9 : 8)
+        : (compact ? 5 : 7),
+    rowGap: denseMode
+      ? (tiny ? 1 : 2)
+      : sidePlacement
+        ? (compact ? 3 : extraWideSide ? 7 : wideSide ? 6 : roomySide ? 5 : 4)
+        : (compact ? 2 : 4),
+    columnGap: columns >= 3 ? 12 : sidePlacement && wideSide ? 16 : 14
   };
 }
 
@@ -1006,7 +994,7 @@ function fitLyricsToViewport() {
 
     for (let columns = 1; columns <= maxColumns; columns += 1) {
       for (let fontPx = maxFontPx; fontPx >= minFontPx; fontPx -= 0.5) {
-        const candidate = createLyricsFitCandidate(fontPx, columns, denseMode);
+        const candidate = createLyricsFitCandidate(fontPx, columns, denseMode, { position, boxWidth });
         applyLyricsFitCandidate(candidate);
         const overflow = measureLyricsOverflow();
         const overflowSum = overflow.height + overflow.width;
@@ -1041,28 +1029,28 @@ function fitLyricsToViewport() {
 function computeLyricsWidthRange(metrics, viewportWidth) {
   const ultraWide = viewportWidth >= 2200;
   const wide = viewportWidth >= 1700;
-  const minWidth = metrics.timed ? 248 : 228;
+  const minWidth = metrics.timed ? 300 : 276;
   const maxCap = ultraWide
-    ? (metrics.timed ? 520 : 500)
+    ? (metrics.timed ? 660 : 620)
     : wide
-      ? (metrics.timed ? 480 : 460)
+      ? (metrics.timed ? 600 : 560)
       : viewportWidth >= 1280
-        ? 430
-        : 380;
+        ? 520
+        : 450;
   const idealWidth = clamp(
     Math.round(
       minWidth
-      + Math.min(metrics.longestLine * (metrics.timed ? 1.55 : 1), metrics.timed ? 78 : 42)
-      + Math.min(metrics.lineCount * (metrics.timed ? 0.34 : 0.18), metrics.timed ? 18 : 10)
-      + Math.min(metrics.averageLine * 0.85, 18)
-      + (ultraWide ? 12 : wide ? 6 : 0)
+      + Math.min(metrics.longestLine * (metrics.timed ? 2.15 : 1.35), metrics.timed ? 112 : 70)
+      + Math.min(metrics.lineCount * (metrics.timed ? 0.45 : 0.24), metrics.timed ? 26 : 14)
+      + Math.min(metrics.averageLine * 1.1, 24)
+      + (ultraWide ? 36 : wide ? 22 : viewportWidth >= 1280 ? 12 : 0)
     ),
     minWidth,
     maxCap
   );
   return {
-    min: clamp(idealWidth - 22, 220, idealWidth),
-    max: clamp(idealWidth + (ultraWide ? 30 : wide ? 24 : 18), minWidth, maxCap)
+    min: clamp(idealWidth - 34, 250, idealWidth),
+    max: clamp(idealWidth + (ultraWide ? 52 : wide ? 44 : 28), minWidth, maxCap)
   };
 }
 
@@ -1185,6 +1173,12 @@ function computePracticeLayoutForBalance(balance, viewportWidth, availableHeight
     const stageMax = Math.max(stageMin, Math.min(horizontalLimit, heightLimitedStage, stageCap));
 
     stageWidth = Math.round(stageMin + normalized * (stageMax - stageMin));
+    const spareWidth = Math.max(0, horizontalLimit - stageWidth);
+    const comfortBoost = Math.min(
+      Math.round(spareWidth * 0.22),
+      Math.max(0, widthRange.max - lyricsWidth)
+    );
+    lyricsWidth = clamp(lyricsWidth + comfortBoost, widthRange.min, widthRange.max);
     playerMin = viewportWidth < 1360 ? 216 : 248;
     lyricsHeight = availableHeight;
     referenceLayout = "side";
@@ -1288,47 +1282,6 @@ function computePracticeLayoutForBalance(balance, viewportWidth, availableHeight
   };
 }
 
-function getPracticeResizeAxis(position = normalizeLyricsPosition(app.practiceLayout.lyricsPosition)) {
-  return position === "left" || position === "right" ? "width" : "height";
-}
-
-function getPracticeTargetSizeForLayout(layout, axis) {
-  return axis === "width"
-    ? Math.max(0, ensureNumber(layout.lyricsWidth, 0))
-    : Math.max(0, ensureNumber(layout.lyricsHeight, 0));
-}
-
-function findNearestPracticeBalanceForTargetSize(targetSizePx, position = normalizeLyricsPosition(app.practiceLayout.lyricsPosition)) {
-  const axis = getPracticeResizeAxis(position);
-  const { viewportWidth, availableHeight } = getPracticeViewportMetrics();
-  const requestedTarget = Math.max(0, ensureNumber(targetSizePx, 0));
-  let bestBalance = clamp(Math.round(ensureNumber(app.practiceLayout.balance, app.practiceLayout.autoBalance)), 34, 74);
-  let bestDistance = Number.POSITIVE_INFINITY;
-
-  for (let candidate = 34; candidate <= 74; candidate += 1) {
-    const layout = computePracticeLayoutForBalance(candidate, viewportWidth, availableHeight);
-    if (axis === "width" && layout.referenceLayout !== "side") continue;
-    if (axis === "height" && layout.referenceLayout === "hidden") continue;
-    const targetSize = getPracticeTargetSizeForLayout(layout, axis);
-    if (!targetSize) continue;
-    const distance = Math.abs(targetSize - requestedTarget);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestBalance = candidate;
-    }
-  }
-
-  return bestBalance;
-}
-
-function applyPracticePaneResize(targetSizePx) {
-  if (app.screen !== "practice" || !app.practiceLyricsVisible) return;
-  const nextBalance = findNearestPracticeBalanceForTargetSize(targetSizePx);
-  app.practiceLayout.manual = true;
-  app.practiceLayout.balance = nextBalance;
-  applyPracticeLayout();
-}
-
 function applyComputedPracticeLayout(layout, availableHeight) {
   const lyricsPosition = normalizeLyricsPosition(app.practiceLayout.lyricsPosition);
   document.body.dataset.practiceLayout = layout.mode;
@@ -1426,7 +1379,6 @@ function applyPracticeLayout(forceAuto = false) {
     dom.practiceLayoutBadge.textContent = getPracticeEmphasis(appliedBalance);
   }
   renderLyricsPositionControls();
-  renderPracticePaneResizer();
 }
 
 function schedulePracticeResizeObserverReaction(action) {
@@ -1476,49 +1428,6 @@ function setupPracticeResizeObserver() {
   practiceResizeObserver.observe(dom.playerSurface);
   practiceResizeObserver.observe(dom.practiceContextBar);
   practiceResizeObserver.observe(dom.lyricsBox);
-}
-
-function syncPracticePaneInteractable(edge = getPracticeResizeEdge()) {
-  if (typeof interact !== "function" || !dom.lyricsSection) return;
-
-  if (!practicePaneInteractable) {
-    practicePaneInteractable = interact(dom.lyricsSection);
-    practicePaneInteractable.styleCursor(false);
-  }
-
-  if (!edge) {
-    practicePaneInteractable.resizable(false);
-    return;
-  }
-
-  const edges = {
-    left: false,
-    right: false,
-    top: false,
-    bottom: false
-  };
-  edges[edge] = `[data-resize-edge="${edge}"]`;
-
-  practicePaneInteractable.resizable({
-    edges,
-    listeners: {
-      start() {
-        if (app.screen !== "practice" || !app.practiceLyricsVisible) return;
-        document.body.classList.add("pane-resizing");
-        dom.lyricsSection.classList.add("is-resizing");
-      },
-      move(event) {
-        if (app.screen !== "practice" || !app.practiceLyricsVisible) return;
-        const axis = getPracticeResizeAxis();
-        const targetSize = axis === "width" ? event.rect.width : event.rect.height;
-        applyPracticePaneResize(targetSize);
-      },
-      end() {
-        document.body.classList.remove("pane-resizing");
-        dom.lyricsSection.classList.remove("is-resizing");
-      }
-    }
-  });
 }
 
 function schedulePracticeLayout(forceAuto = false) {
@@ -2101,7 +2010,6 @@ function renderPracticeLyricsVisibility() {
     setPracticeLyricsDenseMode(false, { skipFitSchedule: true });
     clearLyricsFitStyles();
   }
-  renderPracticePaneResizer();
   schedulePracticeLayout();
 }
 

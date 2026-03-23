@@ -373,10 +373,6 @@ body[data-theme="light"] .siteHeader {
   grid-area: lyrics;
 }
 
-.lyricsSection {
-  position: relative;
-}
-
 .playersCard {
   display: grid;
   gap: 12px;
@@ -812,89 +808,6 @@ input[type="range"] {
   column-count: var(--practice-lyrics-columns, 1);
   column-gap: var(--practice-lyrics-column-gap, 14px);
   column-fill: auto;
-}
-
-.lyricsResizeHandles {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-}
-
-.lyricsResizeHandle {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-  touch-action: none;
-  user-select: none;
-  transition: opacity 160ms ease;
-}
-
-.lyricsResizeHandle::after {
-  content: "";
-  position: absolute;
-  border-radius: 999px;
-  background: rgba(125, 211, 252, 0.72);
-  box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.12);
-}
-
-.lyricsResizeHandle.active {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.lyricsResizeHandle[data-resize-edge="left"],
-.lyricsResizeHandle[data-resize-edge="right"] {
-  top: 56px;
-  bottom: 12px;
-  width: 16px;
-  cursor: ew-resize;
-}
-
-.lyricsResizeHandle[data-resize-edge="left"] {
-  left: -4px;
-}
-
-.lyricsResizeHandle[data-resize-edge="right"] {
-  right: -4px;
-}
-
-.lyricsResizeHandle[data-resize-edge="left"]::after,
-.lyricsResizeHandle[data-resize-edge="right"]::after {
-  top: 10px;
-  bottom: 10px;
-  left: 6px;
-  width: 4px;
-}
-
-.lyricsResizeHandle[data-resize-edge="top"],
-.lyricsResizeHandle[data-resize-edge="bottom"] {
-  left: 16px;
-  right: 16px;
-  height: 16px;
-  cursor: ns-resize;
-}
-
-.lyricsResizeHandle[data-resize-edge="top"] {
-  top: 56px;
-}
-
-.lyricsResizeHandle[data-resize-edge="bottom"] {
-  bottom: -4px;
-}
-
-.lyricsResizeHandle[data-resize-edge="top"]::after,
-.lyricsResizeHandle[data-resize-edge="bottom"]::after {
-  left: 18px;
-  right: 18px;
-  top: 6px;
-  height: 4px;
-}
-
-.lyricsSection.is-resizing {
-  box-shadow:
-    0 0 0 1px rgba(125, 211, 252, 0.28),
-    0 18px 40px rgba(8, 15, 24, 0.42);
 }
 
 .practiceHelper {

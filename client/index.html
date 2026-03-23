@@ -387,7 +387,7 @@
                   <button id="resetPracticeStageBtn" class="secondary" type="button">Auto fit</button>
                 </div>
               </div>
-              <p class="stageSizerHint small">Drag the bar or the active edge of the lyrics card to rebalance the videos against the lyrics panel.</p>
+              <p class="stageSizerHint small">Drag the bar to rebalance the videos against the lyrics panel.</p>
               <input
                 id="practiceStageBalance"
                 class="stageSizerInput"
@@ -463,13 +463,6 @@
                 </div>
                 <button id="practiceModeBtn" class="secondary" type="button">Open fullscreen practice</button>
               </div>
-            </div>
-
-            <div class="lyricsResizeHandles" aria-hidden="true">
-              <div class="lyricsResizeHandle" data-resize-edge="left"></div>
-              <div class="lyricsResizeHandle" data-resize-edge="right"></div>
-              <div class="lyricsResizeHandle" data-resize-edge="top"></div>
-              <div class="lyricsResizeHandle" data-resize-edge="bottom"></div>
             </div>
 
             <div id="lyricsBox" class="lyricsBox"></div>
@@ -619,7 +612,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/interactjs@1.10.27/dist/interact.min.js" crossorigin="anonymous"></script>
 <script src="app.js" defer></script>
 </body>
 </html>

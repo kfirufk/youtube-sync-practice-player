@@ -1080,15 +1080,15 @@ function computePracticeLayoutForBalance(balance, viewportWidth, availableHeight
 
     if (helperVisible) {
       gridTemplateColumns = lyricsPosition === "left"
-        ? `minmax(${lyricsWidth}px, ${lyricsWidth}px) minmax(0, 1fr) minmax(${helperWidth}px, ${helperWidth}px)`
-        : `minmax(0, 1fr) minmax(${lyricsWidth}px, ${lyricsWidth}px) minmax(${helperWidth}px, ${helperWidth}px)`;
+        ? `minmax(${lyricsWidth}px, 1fr) minmax(${stageWidth}px, ${stageWidth}px) minmax(${helperWidth}px, ${helperWidth}px)`
+        : `minmax(${stageWidth}px, ${stageWidth}px) minmax(${lyricsWidth}px, 1fr) minmax(${helperWidth}px, ${helperWidth}px)`;
       gridTemplateAreas = lyricsPosition === "left"
         ? "\"lyrics stage helper\""
         : "\"stage lyrics helper\"";
     } else {
       gridTemplateColumns = lyricsPosition === "left"
-        ? `minmax(${lyricsWidth}px, ${lyricsWidth}px) minmax(0, 1fr)`
-        : `minmax(0, 1fr) minmax(${lyricsWidth}px, ${lyricsWidth}px)`;
+        ? `minmax(${lyricsWidth}px, 1fr) minmax(${stageWidth}px, ${stageWidth}px)`
+        : `minmax(${stageWidth}px, ${stageWidth}px) minmax(${lyricsWidth}px, 1fr)`;
       gridTemplateAreas = lyricsPosition === "left"
         ? "\"lyrics stage\""
         : "\"stage lyrics\"";
@@ -1184,10 +1184,10 @@ function applyComputedPracticeLayout(layout, availableHeight) {
   document.body.dataset.practiceLyricsVisible = app.practiceLyricsVisible ? "visible" : "hidden";
   document.documentElement.style.setProperty("--practice-player-min", `${layout.playerMin}px`);
   if (layout.referenceLayout === "side" && app.practiceLyricsVisible) {
-    dom.practiceStage.style.width = `${Math.max(360, layout.stageWidth)}px`;
-    dom.practiceStage.style.maxWidth = "100%";
+    dom.practiceStage.style.width = "100%";
+    dom.practiceStage.style.maxWidth = `${Math.max(360, layout.stageWidth)}px`;
     dom.practiceStage.style.margin = "0";
-    dom.practiceStage.style.justifySelf = lyricsPosition === "left" ? "start" : "end";
+    dom.practiceStage.style.justifySelf = "";
   } else {
     dom.practiceStage.style.width = "100%";
     dom.practiceStage.style.maxWidth = `${Math.max(360, layout.stageWidth)}px`;

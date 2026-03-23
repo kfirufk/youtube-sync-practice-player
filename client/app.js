@@ -1,4 +1,4 @@
-/* global YT, supabase */
+/* global YT, supabase, interact */
 
 const el = (id) => document.getElementById(id);
 
@@ -125,6 +125,7 @@ const dom = {
   resetPracticeStageBtn: el("resetPracticeStageBtn"),
   practiceReferenceRail: el("practiceReferenceRail"),
   lyricsSection: el("lyricsSection"),
+  lyricsResizeHandles: Array.from(document.querySelectorAll(".lyricsResizeHandle")),
   lyricsPositionControls: el("lyricsPositionControls"),
   lyricsFocusBtn: el("lyricsFocusBtn"),
   lyricsBox: el("lyricsBox"),
@@ -244,6 +245,13 @@ let lastActiveLyricIndex = -1;
 let autosaveTimer = null;
 let practiceLayoutFrame = 0;
 let lyricsFitFrame = 0;
+let practiceResizeObserver = null;
+let practicePaneInteractable = null;
+let practiceResizeObserverFrame = 0;
+let practiceResizeObserverAction = "";
+let lastObservedPlayerSurfaceSize = "";
+let lastObservedContextBarSize = "";
+let lastObservedLyricsBoxSize = "";
 
 class MetronomeEngine {
   constructor() {
@@ -736,12 +744,50 @@ function renderLyricsPositionControls() {
   }
 }
 
+function getPracticeViewportMetrics() {
+  const viewportWidth = Math.max(window.innerWidth || 0, 360);
+  const viewportHeight = Math.max(window.innerHeight || 0, 420);
+  const contextHeight = dom.practiceContextBar.offsetHeight || 0;
+  const availableHeight = Math.max(430, viewportHeight - contextHeight - 42);
+  return { viewportWidth, viewportHeight, availableHeight };
+}
+
+function getPracticeResizeEdge(referenceLayout = document.body.dataset.practiceReferenceLayout || "") {
+  if (app.screen !== "practice" || !app.practiceLyricsVisible) return "";
+  const position = normalizeLyricsPosition(app.practiceLayout.lyricsPosition);
+  if ((position === "left" || position === "right") && referenceLayout !== "side") return "";
+  if (position === "left") return "right";
+  if (position === "right") return "left";
+  if (position === "top") return "bottom";
+  if (position === "bottom") return "top";
+  return "";
+}
+
+function renderPracticePaneResizer() {
+  const edge = getPracticeResizeEdge();
+  const canResize = Boolean(edge) && typeof interact === "function";
+  if (!canResize) {
+    delete document.body.dataset.practiceResizeEdge;
+    document.body.classList.remove("pane-resizing");
+    dom.lyricsSection.classList.remove("is-resizing");
+  } else {
+    document.body.dataset.practiceResizeEdge = edge;
+  }
+  for (const handle of dom.lyricsResizeHandles) {
+    const active = canResize && handle.dataset.resizeEdge === edge;
+    handle.classList.toggle("active", active);
+    handle.classList.toggle("hidden", !active);
+  }
+  syncPracticePaneInteractable(canResize ? edge : "");
+}
+
 function clearPracticeLayoutStyles() {
   delete document.body.dataset.practiceLayout;
   delete document.body.dataset.practiceReferenceLayout;
   delete document.body.dataset.practiceHelperVisible;
   delete document.body.dataset.practiceLyricsPosition;
   delete document.body.dataset.practiceLyricsVisible;
+  delete document.body.dataset.practiceResizeEdge;
   dom.playerSurface.style.gridTemplateColumns = "";
   dom.playerSurface.style.gridTemplateRows = "";
   dom.playerSurface.style.gridTemplateAreas = "";
@@ -761,12 +807,22 @@ function clearPracticeLayoutStyles() {
   dom.lyricsBox.style.removeProperty("--practice-lyrics-pad-x");
   dom.lyricsBox.style.removeProperty("--practice-lyrics-row-gap");
   dom.lyricsBox.classList.remove("denseLyrics");
+  dom.lyricsSection.classList.remove("is-resizing");
+  document.body.classList.remove("pane-resizing");
+  for (const handle of dom.lyricsResizeHandles) {
+    handle.classList.remove("active");
+    handle.classList.add("hidden");
+  }
   document.documentElement.style.removeProperty("--practice-player-min");
   dom.practiceStageBalance.value = String(app.practiceLayout.autoBalance || 54);
   dom.practiceLayoutStatus.textContent = "Auto fit will tune the stage to your window.";
   dom.practiceLayoutBadge.textContent = "Balanced";
   if (lyricsFitFrame) cancelAnimationFrame(lyricsFitFrame);
   lyricsFitFrame = 0;
+  if (practiceResizeObserverFrame) cancelAnimationFrame(practiceResizeObserverFrame);
+  practiceResizeObserverFrame = 0;
+  practiceResizeObserverAction = "";
+  syncPracticePaneInteractable("");
 }
 
 function estimatePracticeVideoHeight(stageWidth) {
@@ -1073,6 +1129,7 @@ function computePracticeLayoutForBalance(balance, viewportWidth, availableHeight
   let playerMin = viewportWidth < 920 ? 200 : 236;
   let referenceLayout = lyricsVisible ? "stacked" : "hidden";
   let lyricsHeight = 0;
+  let lyricsWidth = 0;
 
   if (!lyricsVisible) {
     const reservedTransport = 214;
@@ -1103,7 +1160,8 @@ function computePracticeLayoutForBalance(balance, viewportWidth, availableHeight
       gridTemplateAreas,
       stageWidth,
       playerMin,
-      lyricsHeight
+      lyricsHeight,
+      lyricsWidth
     };
   }
 
@@ -1113,7 +1171,7 @@ function computePracticeLayoutForBalance(balance, viewportWidth, availableHeight
   if (sidePlacement) {
     const helperWidth = helperVisible ? clamp(Math.round(viewportWidth * 0.17), 220, 260) : 0;
     const widthRange = computeLyricsWidthRange(metrics, viewportWidth);
-    const lyricsWidth = clamp(
+    lyricsWidth = clamp(
       Math.round(widthRange.max - normalized * (widthRange.max - widthRange.min)),
       widthRange.min,
       widthRange.max
@@ -1225,8 +1283,50 @@ function computePracticeLayoutForBalance(balance, viewportWidth, availableHeight
     gridTemplateAreas,
     stageWidth,
     playerMin,
-    lyricsHeight
+    lyricsHeight,
+    lyricsWidth
   };
+}
+
+function getPracticeResizeAxis(position = normalizeLyricsPosition(app.practiceLayout.lyricsPosition)) {
+  return position === "left" || position === "right" ? "width" : "height";
+}
+
+function getPracticeTargetSizeForLayout(layout, axis) {
+  return axis === "width"
+    ? Math.max(0, ensureNumber(layout.lyricsWidth, 0))
+    : Math.max(0, ensureNumber(layout.lyricsHeight, 0));
+}
+
+function findNearestPracticeBalanceForTargetSize(targetSizePx, position = normalizeLyricsPosition(app.practiceLayout.lyricsPosition)) {
+  const axis = getPracticeResizeAxis(position);
+  const { viewportWidth, availableHeight } = getPracticeViewportMetrics();
+  const requestedTarget = Math.max(0, ensureNumber(targetSizePx, 0));
+  let bestBalance = clamp(Math.round(ensureNumber(app.practiceLayout.balance, app.practiceLayout.autoBalance)), 34, 74);
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (let candidate = 34; candidate <= 74; candidate += 1) {
+    const layout = computePracticeLayoutForBalance(candidate, viewportWidth, availableHeight);
+    if (axis === "width" && layout.referenceLayout !== "side") continue;
+    if (axis === "height" && layout.referenceLayout === "hidden") continue;
+    const targetSize = getPracticeTargetSizeForLayout(layout, axis);
+    if (!targetSize) continue;
+    const distance = Math.abs(targetSize - requestedTarget);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestBalance = candidate;
+    }
+  }
+
+  return bestBalance;
+}
+
+function applyPracticePaneResize(targetSizePx) {
+  if (app.screen !== "practice" || !app.practiceLyricsVisible) return;
+  const nextBalance = findNearestPracticeBalanceForTargetSize(targetSizePx);
+  app.practiceLayout.manual = true;
+  app.practiceLayout.balance = nextBalance;
+  applyPracticeLayout();
 }
 
 function applyComputedPracticeLayout(layout, availableHeight) {
@@ -1274,10 +1374,7 @@ function applyPracticeLayout(forceAuto = false) {
     return;
   }
 
-  const viewportWidth = Math.max(window.innerWidth || 0, 360);
-  const viewportHeight = Math.max(window.innerHeight || 0, 420);
-  const contextHeight = dom.practiceContextBar.offsetHeight || 0;
-  const availableHeight = Math.max(430, viewportHeight - contextHeight - 42);
+  const { viewportWidth, viewportHeight, availableHeight } = getPracticeViewportMetrics();
   const autoBalance = computeAutoPracticeBalance(viewportWidth, viewportHeight);
   app.practiceLayout.autoBalance = autoBalance;
 
@@ -1329,6 +1426,99 @@ function applyPracticeLayout(forceAuto = false) {
     dom.practiceLayoutBadge.textContent = getPracticeEmphasis(appliedBalance);
   }
   renderLyricsPositionControls();
+  renderPracticePaneResizer();
+}
+
+function schedulePracticeResizeObserverReaction(action) {
+  const nextAction = action === "layout" || practiceResizeObserverAction === "layout"
+    ? "layout"
+    : "fit";
+  practiceResizeObserverAction = nextAction;
+  if (practiceResizeObserverFrame) cancelAnimationFrame(practiceResizeObserverFrame);
+  practiceResizeObserverFrame = window.requestAnimationFrame(() => {
+    const pendingAction = practiceResizeObserverAction;
+    practiceResizeObserverAction = "";
+    practiceResizeObserverFrame = 0;
+    if (app.screen !== "practice") return;
+    if (pendingAction === "layout") schedulePracticeLayout();
+    else if (app.practiceLyricsVisible) scheduleLyricsFit();
+  });
+}
+
+function setupPracticeResizeObserver() {
+  if (practiceResizeObserver || typeof ResizeObserver !== "function") return;
+  practiceResizeObserver = new ResizeObserver((entries) => {
+    let shouldLayout = false;
+    let shouldFit = false;
+
+    for (const entry of entries) {
+      const width = Math.round(entry.contentRect.width);
+      const height = Math.round(entry.contentRect.height);
+      if (!width || !height) continue;
+      const sizeKey = `${width}x${height}`;
+
+      if (entry.target === dom.playerSurface && sizeKey !== lastObservedPlayerSurfaceSize) {
+        lastObservedPlayerSurfaceSize = sizeKey;
+        shouldLayout = true;
+      } else if (entry.target === dom.practiceContextBar && sizeKey !== lastObservedContextBarSize) {
+        lastObservedContextBarSize = sizeKey;
+        shouldLayout = true;
+      } else if (entry.target === dom.lyricsBox && sizeKey !== lastObservedLyricsBoxSize) {
+        lastObservedLyricsBoxSize = sizeKey;
+        shouldFit = true;
+      }
+    }
+
+    if (shouldLayout) schedulePracticeResizeObserverReaction("layout");
+    else if (shouldFit) schedulePracticeResizeObserverReaction("fit");
+  });
+
+  practiceResizeObserver.observe(dom.playerSurface);
+  practiceResizeObserver.observe(dom.practiceContextBar);
+  practiceResizeObserver.observe(dom.lyricsBox);
+}
+
+function syncPracticePaneInteractable(edge = getPracticeResizeEdge()) {
+  if (typeof interact !== "function" || !dom.lyricsSection) return;
+
+  if (!practicePaneInteractable) {
+    practicePaneInteractable = interact(dom.lyricsSection);
+    practicePaneInteractable.styleCursor(false);
+  }
+
+  if (!edge) {
+    practicePaneInteractable.resizable(false);
+    return;
+  }
+
+  const edges = {
+    left: false,
+    right: false,
+    top: false,
+    bottom: false
+  };
+  edges[edge] = `[data-resize-edge="${edge}"]`;
+
+  practicePaneInteractable.resizable({
+    edges,
+    listeners: {
+      start() {
+        if (app.screen !== "practice" || !app.practiceLyricsVisible) return;
+        document.body.classList.add("pane-resizing");
+        dom.lyricsSection.classList.add("is-resizing");
+      },
+      move(event) {
+        if (app.screen !== "practice" || !app.practiceLyricsVisible) return;
+        const axis = getPracticeResizeAxis();
+        const targetSize = axis === "width" ? event.rect.width : event.rect.height;
+        applyPracticePaneResize(targetSize);
+      },
+      end() {
+        document.body.classList.remove("pane-resizing");
+        dom.lyricsSection.classList.remove("is-resizing");
+      }
+    }
+  });
 }
 
 function schedulePracticeLayout(forceAuto = false) {
@@ -1911,6 +2101,7 @@ function renderPracticeLyricsVisibility() {
     setPracticeLyricsDenseMode(false, { skipFitSchedule: true });
     clearLyricsFitStyles();
   }
+  renderPracticePaneResizer();
   schedulePracticeLayout();
 }
 
@@ -3260,6 +3451,7 @@ async function init() {
   setMetronomeButtonLabel();
   renderEditorHeader();
   renderShell();
+  setupPracticeResizeObserver();
 }
 
 init();

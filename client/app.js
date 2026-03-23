@@ -861,29 +861,67 @@ function measureLyricsOverflow() {
   };
 }
 
-function getMaxLyricsColumns(position, boxWidth, denseMode) {
+function getMaxLyricsColumns(position, boxWidth, denseMode, metrics) {
   if (position === "top" || position === "bottom") {
-    if (boxWidth >= 1500) return denseMode ? 5 : 4;
-    if (boxWidth >= 1180) return denseMode ? 4 : 3;
-    if (boxWidth >= 860) return 3;
+    if (metrics.lineCount >= 110 && boxWidth >= 1500) return denseMode ? 5 : 4;
+    if (metrics.lineCount >= 72 && boxWidth >= 1180) return denseMode ? 4 : 3;
+    if (metrics.lineCount >= 42 && boxWidth >= 860) return 3;
     if (boxWidth >= 640) return 2;
     return 1;
   }
-  if (boxWidth >= 1180) return denseMode ? 4 : 3;
-  if (boxWidth >= 900) return denseMode ? 3 : 2;
-  if (boxWidth >= 700) return 2;
+  if (metrics.lineCount >= 110 && boxWidth >= 980) return denseMode ? 3 : 2;
+  if (metrics.lineCount >= 78 && boxWidth >= 720) return 2;
   return 1;
 }
 
-function getPreferredLyricsFont(position, metrics, denseMode) {
-  let font = position === "top" || position === "bottom" ? 14.5 : 13.5;
-  if (metrics.lineCount > 80) font -= 3;
-  else if (metrics.lineCount > 55) font -= 2;
-  else if (metrics.lineCount > 30) font -= 1;
-  if (metrics.longestLine > 46) font -= 1.5;
-  else if (metrics.longestLine > 32) font -= 0.75;
-  if (denseMode) font -= 1;
-  return clamp(font, denseMode ? 8 : 9, 15);
+function getMaxLyricsFont(position, metrics, denseMode, boxWidth, boxHeight) {
+  let font = position === "top" || position === "bottom" ? 16 : 17;
+  if (position === "left" || position === "right") {
+    if (boxWidth >= 320) font += 0.5;
+    if (boxWidth >= 380) font += 0.75;
+    if (boxWidth >= 450) font += 1;
+    if (boxWidth >= 520) font += 1;
+  } else {
+    if (boxWidth >= 900) font += 0.5;
+    if (boxWidth >= 1180) font += 0.5;
+    if (boxWidth >= 1480) font += 0.75;
+  }
+  if (boxHeight >= 220) font += 0.5;
+  if (boxHeight >= 280) font += 0.75;
+  if (boxHeight >= 360) font += 0.75;
+  if (boxHeight >= 660) font += 0.5;
+  if (boxHeight >= 800) font += 0.5;
+  if (metrics.lineCount <= 14) font += 4;
+  else if (metrics.lineCount <= 20) font += 3;
+  else if (metrics.lineCount <= 28) font += 2;
+  else if (metrics.lineCount <= 40) font += 1;
+  if (metrics.lineCount > 110) font -= 3.5;
+  else if (metrics.lineCount > 80) font -= 2.5;
+  else if (metrics.lineCount > 55) font -= 1.5;
+  if (metrics.longestLine > 60) font -= 2;
+  else if (metrics.longestLine > 46) font -= 1.25;
+  else if (metrics.longestLine > 32) font -= 0.5;
+  if (denseMode) font -= 1.25;
+  return clamp(font, denseMode ? 8 : 9, denseMode ? 19 : 24);
+}
+
+function isBetterLyricsFitCandidate(currentBest, nextCandidate, position) {
+  if (!currentBest) return true;
+  const sidePlacement = position === "left" || position === "right";
+  const stackedPlacement = position === "top" || position === "bottom";
+  const columnPenalty = sidePlacement ? 1.6 : stackedPlacement ? 0.95 : 0.6;
+  const nextScore = nextCandidate.fontPx
+    - (nextCandidate.columns - 1) * columnPenalty
+    - (nextCandidate.denseMode ? 0.45 : 0);
+  const bestScore = currentBest.fontPx
+    - (currentBest.columns - 1) * columnPenalty
+    - (currentBest.denseMode ? 0.45 : 0);
+
+  if (nextScore !== bestScore) return nextScore > bestScore;
+  if (nextCandidate.fontPx !== currentBest.fontPx) return nextCandidate.fontPx > currentBest.fontPx;
+  if (nextCandidate.columns !== currentBest.columns) return nextCandidate.columns < currentBest.columns;
+  if (nextCandidate.denseMode !== currentBest.denseMode) return !nextCandidate.denseMode && currentBest.denseMode;
+  return false;
 }
 
 function fitLyricsToViewport() {
@@ -906,12 +944,12 @@ function fitLyricsToViewport() {
 
   for (const denseMode of modes) {
     setPracticeLyricsDenseMode(denseMode, { skipFitSchedule: true });
-    const maxColumns = getMaxLyricsColumns(position, boxWidth, denseMode);
-    const preferredFontPx = getPreferredLyricsFont(position, metrics, denseMode);
+    const maxColumns = getMaxLyricsColumns(position, boxWidth, denseMode, metrics);
+    const maxFontPx = getMaxLyricsFont(position, metrics, denseMode, boxWidth, boxHeight);
     const minFontPx = denseMode ? 6.5 : 8;
 
     for (let columns = 1; columns <= maxColumns; columns += 1) {
-      for (let fontPx = preferredFontPx; fontPx >= minFontPx; fontPx -= 0.5) {
+      for (let fontPx = maxFontPx; fontPx >= minFontPx; fontPx -= 0.5) {
         const candidate = createLyricsFitCandidate(fontPx, columns, denseMode);
         applyLyricsFitCandidate(candidate);
         const overflow = measureLyricsOverflow();
@@ -921,9 +959,7 @@ function fitLyricsToViewport() {
         if (fits) {
           const betterFit = !best
             || !best.fits
-            || candidate.fontPx > best.candidate.fontPx
-            || (candidate.fontPx === best.candidate.fontPx && candidate.columns < best.candidate.columns)
-            || (candidate.fontPx === best.candidate.fontPx && candidate.columns === best.candidate.columns && !candidate.denseMode && best.candidate.denseMode);
+            || isBetterLyricsFitCandidate(best.candidate, candidate, position);
           if (betterFit) {
             best = { fits: true, candidate, overflowSum };
           }
@@ -949,32 +985,55 @@ function fitLyricsToViewport() {
 function computeLyricsWidthRange(metrics, viewportWidth) {
   const ultraWide = viewportWidth >= 2200;
   const wide = viewportWidth >= 1700;
-  const minWidth = metrics.timed ? 228 : 208;
+  const minWidth = metrics.timed ? 248 : 228;
   const maxCap = ultraWide
-    ? (metrics.timed ? 640 : 600)
+    ? (metrics.timed ? 520 : 500)
     : wide
-      ? (metrics.timed ? 560 : 520)
+      ? (metrics.timed ? 480 : 460)
       : viewportWidth >= 1280
-        ? 450
+        ? 430
         : 380;
   const idealWidth = clamp(
     Math.round(
       minWidth
-      + Math.min(metrics.longestLine * (metrics.timed ? 1.85 : 1.2), metrics.timed ? 108 : 60)
-      + Math.min(metrics.lineCount * (metrics.timed ? 0.82 : 0.42), metrics.timed ? 54 : 26)
-      + Math.min(metrics.averageLine * 1.1, 28)
-      + (ultraWide ? 34 : wide ? 18 : 0)
+      + Math.min(metrics.longestLine * (metrics.timed ? 1.55 : 1), metrics.timed ? 78 : 42)
+      + Math.min(metrics.lineCount * (metrics.timed ? 0.34 : 0.18), metrics.timed ? 18 : 10)
+      + Math.min(metrics.averageLine * 0.85, 18)
+      + (ultraWide ? 12 : wide ? 6 : 0)
     ),
     minWidth,
     maxCap
   );
   return {
-    min: clamp(idealWidth - (ultraWide ? 48 : 36), 200, idealWidth),
-    max: clamp(idealWidth + (ultraWide ? 80 : wide ? 54 : 32), minWidth, maxCap)
+    min: clamp(idealWidth - 22, 220, idealWidth),
+    max: clamp(idealWidth + (ultraWide ? 30 : wide ? 24 : 18), minWidth, maxCap)
   };
 }
 
-function computeLyricsHeightRange(metrics) {
+function computeLyricsHeightRange(metrics, availableHeight, position) {
+  const topBottom = position === "top" || position === "bottom";
+  if (topBottom) {
+    const minHeight = metrics.timed ? 138 : 126;
+    const maxCap = clamp(
+      Math.round(Math.min(availableHeight * 0.38, metrics.lineCount > 84 ? 360 : 320)),
+      180,
+      metrics.lineCount > 84 ? 360 : 320
+    );
+    const idealHeight = clamp(
+      Math.round(
+        minHeight
+        + Math.min(metrics.lineCount * (metrics.timed ? 0.95 : 0.62), metrics.timed ? 68 : 42)
+        + Math.min(metrics.longestLine * 0.35, 18)
+      ),
+      minHeight,
+      maxCap - 18
+    );
+    return {
+      min: clamp(idealHeight - 24, 120, idealHeight),
+      max: clamp(idealHeight + 24, minHeight, maxCap)
+    };
+  }
+
   const minHeight = metrics.timed ? 170 : 150;
   const idealHeight = clamp(
     Math.round(
@@ -1054,7 +1113,7 @@ function computePracticeLayoutForBalance(balance, viewportWidth, availableHeight
   if (sidePlacement) {
     const helperWidth = helperVisible ? clamp(Math.round(viewportWidth * 0.17), 220, 260) : 0;
     const widthRange = computeLyricsWidthRange(metrics, viewportWidth);
-    let lyricsWidth = clamp(
+    const lyricsWidth = clamp(
       Math.round(widthRange.max - normalized * (widthRange.max - widthRange.min)),
       widthRange.min,
       widthRange.max
@@ -1068,35 +1127,29 @@ function computePracticeLayoutForBalance(balance, viewportWidth, availableHeight
     const stageMax = Math.max(stageMin, Math.min(horizontalLimit, heightLimitedStage, stageCap));
 
     stageWidth = Math.round(stageMin + normalized * (stageMax - stageMin));
-    const spareWidth = Math.max(0, horizontalLimit - stageWidth);
-    const extraLyricsCap = viewportWidth >= 2200 ? 180 : viewportWidth >= 1700 ? 120 : 72;
-    const extraLyricsWidth = Math.min(Math.max(0, spareWidth - 28), extraLyricsCap);
-    if (extraLyricsWidth > 0) {
-      lyricsWidth = Math.min(widthRange.max + extraLyricsCap, lyricsWidth + extraLyricsWidth);
-    }
     playerMin = viewportWidth < 1360 ? 216 : 248;
     lyricsHeight = availableHeight;
     referenceLayout = "side";
 
     if (helperVisible) {
       gridTemplateColumns = lyricsPosition === "left"
-        ? `minmax(${lyricsWidth}px, 1fr) minmax(${stageWidth}px, ${stageWidth}px) minmax(${helperWidth}px, ${helperWidth}px)`
-        : `minmax(${stageWidth}px, ${stageWidth}px) minmax(${lyricsWidth}px, 1fr) minmax(${helperWidth}px, ${helperWidth}px)`;
+        ? `minmax(0, 1fr) minmax(${lyricsWidth}px, ${lyricsWidth}px) minmax(${stageWidth}px, ${stageWidth}px) minmax(${helperWidth}px, ${helperWidth}px)`
+        : `minmax(${stageWidth}px, ${stageWidth}px) minmax(${lyricsWidth}px, ${lyricsWidth}px) minmax(0, 1fr) minmax(${helperWidth}px, ${helperWidth}px)`;
       gridTemplateAreas = lyricsPosition === "left"
-        ? "\"lyrics stage helper\""
-        : "\"stage lyrics helper\"";
+        ? "\". lyrics stage helper\""
+        : "\"stage lyrics . helper\"";
     } else {
       gridTemplateColumns = lyricsPosition === "left"
-        ? `minmax(${lyricsWidth}px, 1fr) minmax(${stageWidth}px, ${stageWidth}px)`
-        : `minmax(${stageWidth}px, ${stageWidth}px) minmax(${lyricsWidth}px, 1fr)`;
+        ? `minmax(0, 1fr) minmax(${lyricsWidth}px, ${lyricsWidth}px) minmax(${stageWidth}px, ${stageWidth}px)`
+        : `minmax(${stageWidth}px, ${stageWidth}px) minmax(${lyricsWidth}px, ${lyricsWidth}px) minmax(0, 1fr)`;
       gridTemplateAreas = lyricsPosition === "left"
-        ? "\"lyrics stage\""
-        : "\"stage lyrics\"";
+        ? "\". lyrics stage\""
+        : "\"stage lyrics .\"";
     }
     gridTemplateRows = "minmax(0, 1fr)";
   } else if (stackedPlacement) {
     const helperWidth = helperVisible ? clamp(Math.round(viewportWidth * 0.16), 210, 250) : 0;
-    const heightRange = computeLyricsHeightRange(metrics);
+    const heightRange = computeLyricsHeightRange(metrics, availableHeight, lyricsPosition);
     lyricsHeight = clamp(
       Math.round(heightRange.max - normalized * (heightRange.max - heightRange.min)),
       heightRange.min,
@@ -1125,7 +1178,7 @@ function computePracticeLayoutForBalance(balance, viewportWidth, availableHeight
     }
   } else {
     const helperReserve = helperVisible ? (mode === "compact" ? 132 : 160) : 0;
-    const heightRange = computeLyricsHeightRange(metrics);
+    const heightRange = computeLyricsHeightRange(metrics, availableHeight, lyricsPosition);
     const targetLyricsHeight = clamp(
       Math.round(heightRange.max - normalized * (heightRange.max - heightRange.min)),
       mode === "compact" ? 140 : 190,

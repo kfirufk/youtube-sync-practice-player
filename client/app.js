@@ -919,17 +919,22 @@ function getMaxLyricsColumns(position, boxWidth, denseMode, metrics) {
 }
 
 function getMaxLyricsFont(position, metrics, denseMode, boxWidth, boxHeight) {
+  const sidePlacement = position === "left" || position === "right";
   let font = position === "top" || position === "bottom" ? 16 : 17;
-  if (position === "left" || position === "right") {
+  if (sidePlacement) {
     if (boxWidth >= 320) font += 0.5;
     if (boxWidth >= 380) font += 0.75;
     if (boxWidth >= 450) font += 1;
     if (boxWidth >= 520) font += 1;
+    if (boxWidth >= 600) font += 0.5;
   } else {
     if (boxWidth >= 900) font += 0.5;
     if (boxWidth >= 1180) font += 0.5;
     if (boxWidth >= 1480) font += 0.75;
   }
+  if (sidePlacement && boxWidth >= 360 && boxHeight >= 420) font += 0.5;
+  if (sidePlacement && boxWidth >= 420 && metrics.lineCount <= 32) font += 0.5;
+  if (sidePlacement && boxWidth >= 480 && metrics.lineCount <= 22) font += 0.5;
   if (boxHeight >= 220) font += 0.5;
   if (boxHeight >= 280) font += 0.75;
   if (boxHeight >= 360) font += 0.75;
@@ -946,7 +951,7 @@ function getMaxLyricsFont(position, metrics, denseMode, boxWidth, boxHeight) {
   else if (metrics.longestLine > 46) font -= 1.25;
   else if (metrics.longestLine > 32) font -= 0.5;
   if (denseMode) font -= 1.25;
-  return clamp(font, denseMode ? 8 : 9, denseMode ? 19 : 24);
+  return clamp(font, denseMode ? 8 : 9, denseMode ? 19.5 : sidePlacement ? 25.5 : 24);
 }
 
 function isBetterLyricsFitCandidate(currentBest, nextCandidate, position) {

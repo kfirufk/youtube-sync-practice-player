@@ -4,7 +4,6 @@ go 1.25.0
 
 require (
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/resend/resend-go/v3 v3.2.0
 	google.golang.org/api v0.272.0
 	gopkg.in/yaml.v3 v3.0.1
 )

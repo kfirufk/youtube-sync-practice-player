@@ -12,8 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/resend/resend-go/v3"
 )
 
 type Server struct {
@@ -22,7 +20,6 @@ type Server struct {
 	clientDir   string
 	projectRoot string
 	httpClient  *http.Client
-	resend      *resend.Client
 	authLimiter *authRateLimiter
 }
 
@@ -58,11 +55,6 @@ func main() {
 		log.Fatalf("bootstrap legacy seed: %v", err)
 	}
 
-	var resendClient *resend.Client
-	if strings.TrimSpace(cfg.Resend.APIKey) != "" {
-		resendClient = resend.NewClient(cfg.Resend.APIKey)
-	}
-
 	server := &Server{
 		cfg:         cfg,
 		store:       store,
@@ -71,7 +63,6 @@ func main() {
 		httpClient: &http.Client{
 			Timeout: 12 * time.Second,
 		},
-		resend:      resendClient,
 		authLimiter: newAuthRateLimiter(),
 	}
 

@@ -39,9 +39,16 @@ type AuthConfig struct {
 }
 
 type ResendConfig struct {
-	APIKey       string `yaml:"api_key"`
-	FromEmail    string `yaml:"from_email"`
-	ReplyToEmail string `yaml:"reply_to_email"`
+	FromEmail    string     `yaml:"from_email"`
+	ReplyToEmail string     `yaml:"reply_to_email"`
+	SMTP         SMTPConfig `yaml:"smtp"`
+}
+
+type SMTPConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
 }
 
 type GoogleConfig struct {
@@ -73,7 +80,13 @@ func defaultConfig() Config {
 			SessionTTLHours:     24 * 30,
 			MagicLinkTTLMinutes: 20,
 		},
-		Resend: ResendConfig{},
+		Resend: ResendConfig{
+			SMTP: SMTPConfig{
+				Host: "smtp.resend.com",
+				Port: 465,
+				User: "resend",
+			},
+		},
 		Google: GoogleConfig{},
 		Site: SiteConfig{
 			Name:         "sync.tvguitar.com",
@@ -129,9 +142,20 @@ func (cfg *Config) normalize() {
 		cfg.Auth.MagicLinkTTLMinutes = 20
 	}
 
-	cfg.Resend.APIKey = strings.TrimSpace(cfg.Resend.APIKey)
 	cfg.Resend.FromEmail = strings.TrimSpace(cfg.Resend.FromEmail)
 	cfg.Resend.ReplyToEmail = strings.TrimSpace(cfg.Resend.ReplyToEmail)
+	cfg.Resend.SMTP.Host = strings.TrimSpace(cfg.Resend.SMTP.Host)
+	if cfg.Resend.SMTP.Host == "" {
+		cfg.Resend.SMTP.Host = "smtp.resend.com"
+	}
+	if cfg.Resend.SMTP.Port <= 0 {
+		cfg.Resend.SMTP.Port = 465
+	}
+	cfg.Resend.SMTP.User = strings.TrimSpace(cfg.Resend.SMTP.User)
+	if cfg.Resend.SMTP.User == "" {
+		cfg.Resend.SMTP.User = "resend"
+	}
+	cfg.Resend.SMTP.Password = strings.TrimSpace(cfg.Resend.SMTP.Password)
 	cfg.Google.ClientID = strings.TrimSpace(cfg.Google.ClientID)
 
 	if strings.TrimSpace(cfg.Site.Name) == "" {

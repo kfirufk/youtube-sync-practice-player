@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -12,12 +14,13 @@ import (
 	"net"
 	"net/http"
 	"net/mail"
+	"net/smtp"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/resend/resend-go/v3"
 	"google.golang.org/api/idtoken"
 )
 
@@ -66,7 +69,11 @@ func (l *authRateLimiter) Allow(key string, limit int, window time.Duration) boo
 }
 
 func (s *Server) emailAuthEnabled() bool {
-	return s.resend != nil && strings.TrimSpace(s.cfg.Resend.FromEmail) != ""
+	return strings.TrimSpace(s.cfg.Resend.FromEmail) != "" &&
+		strings.TrimSpace(s.cfg.Resend.SMTP.Host) != "" &&
+		s.cfg.Resend.SMTP.Port > 0 &&
+		strings.TrimSpace(s.cfg.Resend.SMTP.User) != "" &&
+		strings.TrimSpace(s.cfg.Resend.SMTP.Password) != ""
 }
 
 func (s *Server) googleAuthEnabled() bool {
@@ -375,7 +382,7 @@ func (s *Server) readSessionToken(r *http.Request) string {
 }
 
 func (s *Server) sendMagicLinkEmail(ctx context.Context, email string, rawToken string, flow string, expiresAt time.Time) error {
-	if s.resend == nil {
+	if !s.emailAuthEnabled() {
 		return errors.New("email sign-in is not configured yet")
 	}
 
@@ -417,21 +424,169 @@ func (s *Server) sendMagicLinkEmail(ctx context.Context, email string, rawToken 
 		minutesLeft,
 	)
 
-	req := &resend.SendEmailRequest{
-		From:    s.cfg.Resend.FromEmail,
-		To:      []string{email},
-		Subject: subject,
-		Text:    text,
-		Html:    htmlBody,
-	}
-	if replyTo := strings.TrimSpace(s.cfg.Resend.ReplyToEmail); replyTo != "" {
-		req.ReplyTo = replyTo
+	message, err := buildEmailMessage(
+		s.cfg.Resend.FromEmail,
+		email,
+		subject,
+		s.cfg.Resend.ReplyToEmail,
+		text,
+		htmlBody,
+	)
+	if err != nil {
+		return fmt.Errorf("build magic link email: %w", err)
 	}
 
-	if _, err := s.resend.Emails.SendWithContext(ctx, req); err != nil {
+	fromAddress, err := smtpEnvelopeAddress(s.cfg.Resend.FromEmail)
+	if err != nil {
+		return err
+	}
+
+	if err := sendSMTPMail(ctx, s.cfg.Resend.SMTP, fromAddress, []string{email}, message); err != nil {
 		return fmt.Errorf("send magic link email: %w", err)
 	}
 	return nil
+}
+
+func buildEmailMessage(fromHeader string, to string, subject string, replyTo string, textBody string, htmlBody string) ([]byte, error) {
+	if strings.TrimSpace(fromHeader) == "" {
+		return nil, errors.New("resend.from_email is required")
+	}
+	if _, err := smtpEnvelopeAddress(fromHeader); err != nil {
+		return nil, err
+	}
+	if _, _, err := normalizeEmail(to); err != nil {
+		return nil, err
+	}
+
+	boundary := fmt.Sprintf("sync-%d", time.Now().UnixNano())
+	var out bytes.Buffer
+
+	headers := []string{
+		fmt.Sprintf("From: %s", fromHeader),
+		fmt.Sprintf("To: %s", to),
+		fmt.Sprintf("Subject: %s", subject),
+		fmt.Sprintf("Date: %s", time.Now().UTC().Format(time.RFC1123Z)),
+		"MIME-Version: 1.0",
+		fmt.Sprintf(`Content-Type: multipart/alternative; boundary="%s"`, boundary),
+	}
+	if replyTo = strings.TrimSpace(replyTo); replyTo != "" {
+		headers = append(headers, fmt.Sprintf("Reply-To: %s", replyTo))
+	}
+
+	for _, header := range headers {
+		out.WriteString(header)
+		out.WriteString("\r\n")
+	}
+	out.WriteString("\r\n")
+
+	writeSMTPPart(&out, boundary, "text/plain; charset=UTF-8", textBody)
+	writeSMTPPart(&out, boundary, "text/html; charset=UTF-8", htmlBody)
+	out.WriteString("--")
+	out.WriteString(boundary)
+	out.WriteString("--\r\n")
+
+	return out.Bytes(), nil
+}
+
+func writeSMTPPart(out *bytes.Buffer, boundary string, contentType string, body string) {
+	out.WriteString("--")
+	out.WriteString(boundary)
+	out.WriteString("\r\n")
+	out.WriteString("Content-Type: ")
+	out.WriteString(contentType)
+	out.WriteString("\r\n")
+	out.WriteString("Content-Transfer-Encoding: 8bit\r\n\r\n")
+	out.WriteString(toCRLF(body))
+	out.WriteString("\r\n")
+}
+
+func smtpEnvelopeAddress(raw string) (string, error) {
+	parsed, err := mail.ParseAddress(strings.TrimSpace(raw))
+	if err != nil || strings.TrimSpace(parsed.Address) == "" {
+		return "", errors.New("resend.from_email must be a valid email sender")
+	}
+	return strings.TrimSpace(parsed.Address), nil
+}
+
+func sendSMTPMail(ctx context.Context, cfg SMTPConfig, from string, to []string, message []byte) error {
+	address := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
+	dialer := &net.Dialer{Timeout: 12 * time.Second}
+
+	var (
+		conn net.Conn
+		err  error
+	)
+	if smtpUsesImplicitTLS(cfg.Port) {
+		conn, err = tls.DialWithDialer(dialer, "tcp", address, &tls.Config{
+			ServerName: cfg.Host,
+			MinVersion: tls.VersionTLS12,
+		})
+	} else {
+		conn, err = dialer.DialContext(ctx, "tcp", address)
+	}
+	if err != nil {
+		return err
+	}
+
+	client, err := smtp.NewClient(conn, cfg.Host)
+	if err != nil {
+		conn.Close()
+		return err
+	}
+	defer client.Close()
+
+	if !smtpUsesImplicitTLS(cfg.Port) {
+		if ok, _ := client.Extension("STARTTLS"); !ok {
+			return errors.New("SMTP server does not support STARTTLS")
+		}
+		if err := client.StartTLS(&tls.Config{
+			ServerName: cfg.Host,
+			MinVersion: tls.VersionTLS12,
+		}); err != nil {
+			return err
+		}
+	}
+
+	if ok, _ := client.Extension("AUTH"); !ok {
+		return errors.New("SMTP server does not support AUTH")
+	}
+	if err := client.Auth(smtp.PlainAuth("", cfg.User, cfg.Password, cfg.Host)); err != nil {
+		return err
+	}
+	if err := client.Mail(from); err != nil {
+		return err
+	}
+	for _, recipient := range to {
+		if err := client.Rcpt(recipient); err != nil {
+			return err
+		}
+	}
+
+	writer, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := writer.Write(message); err != nil {
+		writer.Close()
+		return err
+	}
+	if err := writer.Close(); err != nil {
+		return err
+	}
+	if err := client.Quit(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func smtpUsesImplicitTLS(port int) bool {
+	return port == 465 || port == 2465
+}
+
+func toCRLF(input string) string {
+	normalized := strings.ReplaceAll(input, "\r\n", "\n")
+	normalized = strings.ReplaceAll(normalized, "\r", "\n")
+	return strings.ReplaceAll(normalized, "\n", "\r\n")
 }
 
 func (s *Server) redirectAuthResult(w http.ResponseWriter, r *http.Request, authValue string, authError string) {

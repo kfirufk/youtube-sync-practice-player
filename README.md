@@ -27,8 +27,11 @@ A Go + PostgreSQL practice player for syncing a tutorial video and an official c
 Copy `api/config.example.yaml` to `api/config.yaml` and fill in:
 
 - `database.*`
-- `resend.api_key`
 - `resend.from_email`
+- `resend.smtp.host`
+- `resend.smtp.port`
+- `resend.smtp.user`
+- `resend.smtp.password`
 - `google.client_id`
 - `site.base_url`
 
@@ -36,6 +39,7 @@ Notes:
 
 - `site.base_url` must match the public origin that receives the magic-link callback.
 - `resend.from_email` must be a sender identity that is valid in your Resend account.
+- Resend SMTP commonly uses `smtp.resend.com`, user `resend`, and your Resend SMTP/API secret as the SMTP password.
 - If `google.client_id` is left blank, Google sign-in stays hidden.
 - If the Resend values are left blank, email magic links stay disabled.
 

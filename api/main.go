@@ -354,18 +354,21 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request, ide
 		return
 	}
 
-	if err := s.store.RevokeAllSessionsForUser(r.Context(), identity.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if err := s.store.SoftDeleteProfile(r.Context(), identity.ID); err != nil {
+	result, err := s.store.DeleteAccountData(r.Context(), identity.ID)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, "account not found")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	s.clearSessionCookie(w)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"deleted": true,
+		"deleted":                  true,
+		"deletedDraftSongs":        result.DeletedDraftSongs,
+		"anonymizedPublishedSongs": result.AnonymizedPublishedSongs,
 	})
 }
 

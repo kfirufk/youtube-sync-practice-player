@@ -1784,7 +1784,7 @@ function renderProfile() {
     return;
   }
   if (!dom.deleteAccountStatus.textContent) {
-    dom.deleteAccountStatus.textContent = `Deleting your account will remove your local profile data and end your active sessions. Published songs may remain visible. Type ${DELETE_ACCOUNT_CONFIRMATION} exactly, then confirm the dialog.`;
+    dom.deleteAccountStatus.textContent = `Deleting your account removes your profile, sessions, and sign-in records, deletes unpublished drafts, and anonymizes any published songs that remain public. Type ${DELETE_ACCOUNT_CONFIRMATION} exactly, then confirm the dialog.`;
   }
 }
 
@@ -3218,7 +3218,7 @@ async function deleteAccount() {
   dom.deleteAccountBtn.disabled = true;
   dom.deleteAccountStatus.textContent = "Deleting account…";
   try {
-    await apiFetch("/api/me/account/delete", {
+    const result = await apiFetch("/api/me/account/delete", {
       method: "POST",
       body: JSON.stringify({ confirmation })
     });
@@ -3226,7 +3226,14 @@ async function deleteAccount() {
     resetDeleteAccountForm();
     closeModal(dom.profileModal);
     createNewDraft(true, { quiet: true, screen: "lobby" });
-    showToast("Account deletion completed.", "success");
+    const summary = [];
+    if (Number(result?.deletedDraftSongs || 0) > 0) {
+      summary.push(`${result.deletedDraftSongs} draft${result.deletedDraftSongs === 1 ? "" : "s"} deleted`);
+    }
+    if (Number(result?.anonymizedPublishedSongs || 0) > 0) {
+      summary.push(`${result.anonymizedPublishedSongs} published song${result.anonymizedPublishedSongs === 1 ? "" : "s"} anonymized`);
+    }
+    showToast(summary.length ? `Account deleted. ${summary.join(", ")}.` : "Account deletion completed.", "success");
   } catch (error) {
     dom.deleteAccountStatus.textContent = error.message;
     renderProfile();

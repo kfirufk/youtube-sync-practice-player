@@ -454,26 +454,6 @@ func (s *Store) UpdateSong(ctx context.Context, identity UserIdentity, songID st
 	return scanSongRow(row, identity.ID)
 }
 
-func (s *Store) SoftDeleteProfile(ctx context.Context, userID string) error {
-	_, err := s.pool.Exec(ctx, `
-		update user_profiles
-		set deleted_at = now(),
-			email = '',
-			email_normalized = null,
-			display_name = '',
-			google_subject = null,
-			email_verified_at = null,
-			last_login_at = null,
-			settings = '{}'::jsonb,
-			updated_at = now()
-		where user_id = $1
-	`, userID)
-	if err != nil {
-		return fmt.Errorf("soft delete profile: %w", err)
-	}
-	return nil
-}
-
 func (s *Store) uniqueSlug(ctx context.Context, base string, ignoreSongID string) (string, error) {
 	if strings.TrimSpace(base) == "" {
 		base = "song"

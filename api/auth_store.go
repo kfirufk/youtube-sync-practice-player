@@ -27,6 +27,11 @@ type pendingEmailAuthToken struct {
 	ExpiresAt            time.Time
 }
 
+type deleteAccountResult struct {
+	DeletedDraftSongs        int64
+	AnonymizedPublishedSongs int64
+}
+
 type queryRower interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
@@ -356,6 +361,86 @@ func (s *Store) RevokeAllSessionsForUser(ctx context.Context, userID string) err
 		return fmt.Errorf("revoke user sessions: %w", err)
 	}
 	return nil
+}
+
+func (s *Store) DeleteAccountData(ctx context.Context, userID string) (deleteAccountResult, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return deleteAccountResult{}, fmt.Errorf("begin delete account: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var result deleteAccountResult
+	var emailNormalized *string
+
+	err = tx.QueryRow(ctx, `
+		select email_normalized
+		from user_profiles
+		where user_id = $1
+		for update
+	`, userID).Scan(&emailNormalized)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return deleteAccountResult{}, errNotFound
+		}
+		return deleteAccountResult{}, fmt.Errorf("load account for deletion: %w", err)
+	}
+
+	deleteDraftsTag, err := tx.Exec(ctx, `
+		delete from songs
+		where owner_user_id = $1
+		  and published = false
+	`, userID)
+	if err != nil {
+		return deleteAccountResult{}, fmt.Errorf("delete draft songs: %w", err)
+	}
+	result.DeletedDraftSongs = deleteDraftsTag.RowsAffected()
+
+	anonymizeTag, err := tx.Exec(ctx, `
+		update songs
+		set owner_user_id = null,
+			owner_display_name = 'Deleted creator',
+			updated_at = now()
+		where owner_user_id = $1
+		  and published = true
+	`, userID)
+	if err != nil {
+		return deleteAccountResult{}, fmt.Errorf("anonymize published songs: %w", err)
+	}
+	result.AnonymizedPublishedSongs = anonymizeTag.RowsAffected()
+
+	if _, err := tx.Exec(ctx, `
+		delete from user_sessions
+		where user_id = $1
+	`, userID); err != nil {
+		return deleteAccountResult{}, fmt.Errorf("delete user sessions: %w", err)
+	}
+
+	if emailNormalized != nil && strings.TrimSpace(*emailNormalized) != "" {
+		if _, err := tx.Exec(ctx, `
+			delete from email_auth_tokens
+			where email_normalized = $1
+		`, strings.TrimSpace(*emailNormalized)); err != nil {
+			return deleteAccountResult{}, fmt.Errorf("delete email auth tokens: %w", err)
+		}
+	}
+
+	deleteProfileTag, err := tx.Exec(ctx, `
+		delete from user_profiles
+		where user_id = $1
+	`, userID)
+	if err != nil {
+		return deleteAccountResult{}, fmt.Errorf("delete user profile: %w", err)
+	}
+	if deleteProfileTag.RowsAffected() == 0 {
+		return deleteAccountResult{}, errNotFound
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return deleteAccountResult{}, fmt.Errorf("commit delete account: %w", err)
+	}
+
+	return result, nil
 }
 
 func queryUserAccount(ctx context.Context, q queryRower, query string, args ...any) (userAccount, error) {

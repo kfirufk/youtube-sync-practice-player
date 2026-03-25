@@ -32,6 +32,7 @@ Copy `api/config.example.yaml` to `api/config.yaml` and fill in:
 - `email.smtp.port`
 - `email.smtp.user`
 - `email.smtp.password`
+- `email.smtp.require_tls`
 - `google.client_id`
 - `site.base_url`
 
@@ -40,6 +41,7 @@ Notes:
 - `site.base_url` must match the public origin that receives the magic-link callback.
 - `email.from_email` must be a valid sender identity for your SMTP provider.
 - If you use Resend SMTP, the common settings are `smtp.resend.com`, user `resend`, and your Resend SMTP/API secret as the SMTP password.
+- `email.smtp.require_tls` should usually stay `true`. If you set it to `false`, the app can fall back to non-TLS SMTP auth on servers you explicitly trust.
 - If `google.client_id` is left blank, Google sign-in stays hidden.
 - If the email SMTP values are left blank, email magic links stay disabled.
 

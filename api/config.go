@@ -45,10 +45,11 @@ type EmailConfig struct {
 }
 
 type SMTPConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
+	Host       string `yaml:"host"`
+	Port       int    `yaml:"port"`
+	User       string `yaml:"user"`
+	Password   string `yaml:"password"`
+	RequireTLS bool   `yaml:"require_tls"`
 }
 
 type GoogleConfig struct {
@@ -82,9 +83,10 @@ func defaultConfig() Config {
 		},
 		Email: EmailConfig{
 			SMTP: SMTPConfig{
-				Host: "smtp.resend.com",
-				Port: 465,
-				User: "resend",
+				Host:       "smtp.resend.com",
+				Port:       465,
+				User:       "resend",
+				RequireTLS: true,
 			},
 		},
 		Google: GoogleConfig{},
@@ -156,6 +158,12 @@ func (cfg *Config) normalize() {
 		cfg.Email.SMTP.User = "resend"
 	}
 	cfg.Email.SMTP.Password = strings.TrimSpace(cfg.Email.SMTP.Password)
+	if !cfg.Email.SMTP.RequireTLS && smtpUsesImplicitTLS(cfg.Email.SMTP.Port) {
+		cfg.Email.SMTP.RequireTLS = true
+	}
+	if cfg.Email.SMTP.Port <= 0 || smtpUsesImplicitTLS(cfg.Email.SMTP.Port) {
+		cfg.Email.SMTP.RequireTLS = true
+	}
 	cfg.Google.ClientID = strings.TrimSpace(cfg.Google.ClientID)
 
 	if strings.TrimSpace(cfg.Site.Name) == "" {

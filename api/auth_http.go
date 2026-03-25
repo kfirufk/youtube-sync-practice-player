@@ -536,21 +536,22 @@ func sendSMTPMail(ctx context.Context, cfg SMTPConfig, from string, to []string,
 	defer client.Close()
 
 	if !smtpUsesImplicitTLS(cfg.Port) {
-		if ok, _ := client.Extension("STARTTLS"); !ok {
-			return errors.New("SMTP server does not support STARTTLS")
-		}
-		if err := client.StartTLS(&tls.Config{
-			ServerName: cfg.Host,
-			MinVersion: tls.VersionTLS12,
-		}); err != nil {
-			return err
+		if ok, _ := client.Extension("STARTTLS"); ok {
+			if err := client.StartTLS(&tls.Config{
+				ServerName: cfg.Host,
+				MinVersion: tls.VersionTLS12,
+			}); err != nil {
+				return err
+			}
+		} else if cfg.RequireTLS {
+			return errors.New("SMTP server does not support STARTTLS and email.smtp.require_tls is true")
 		}
 	}
 
 	if ok, _ := client.Extension("AUTH"); !ok {
 		return errors.New("SMTP server does not support AUTH")
 	}
-	if err := client.Auth(smtp.PlainAuth("", cfg.User, cfg.Password, cfg.Host)); err != nil {
+	if err := client.Auth(newPlainAuth(cfg.User, cfg.Password, cfg.Host, !cfg.RequireTLS)); err != nil {
 		return err
 	}
 	if err := client.Mail(from); err != nil {
@@ -581,6 +582,43 @@ func sendSMTPMail(ctx context.Context, cfg SMTPConfig, from string, to []string,
 
 func smtpUsesImplicitTLS(port int) bool {
 	return port == 465 || port == 2465
+}
+
+type plainAuth struct {
+	username      string
+	password      string
+	host          string
+	allowInsecure bool
+}
+
+func newPlainAuth(username string, password string, host string, allowInsecure bool) smtp.Auth {
+	return &plainAuth{
+		username:      username,
+		password:      password,
+		host:          host,
+		allowInsecure: allowInsecure,
+	}
+}
+
+func (a *plainAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	if server == nil {
+		return "", nil, errors.New("SMTP server info missing")
+	}
+	if server.Name != a.host {
+		return "", nil, errors.New("wrong SMTP host name")
+	}
+	if !server.TLS && !a.allowInsecure {
+		return "", nil, errors.New("unencrypted SMTP connection")
+	}
+	resp := []byte(fmt.Sprintf("\x00%s\x00%s", a.username, a.password))
+	return "PLAIN", resp, nil
+}
+
+func (a *plainAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if more {
+		return nil, errors.New("unexpected SMTP auth challenge")
+	}
+	return nil, nil
 }
 
 func toCRLF(input string) string {

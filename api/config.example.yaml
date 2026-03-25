@@ -23,6 +23,7 @@ email:
     port: 465
     user: resend
     password: ""
+    require_tls: true
 
 google:
   client_id: ""

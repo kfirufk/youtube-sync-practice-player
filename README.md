@@ -2,28 +2,48 @@
 
 A Go + PostgreSQL practice player for syncing a tutorial video and an official clip on one shared timeline.
 
-## What changed
-
-- Songs now load from PostgreSQL through a Go server instead of being fetched directly from inline JSON.
-- `api/db/patches/*.sql` are applied automatically on startup.
-- `api/config.yaml` holds the server, PostgreSQL, Supabase, and site settings.
-- Supabase handles email/password login for the browser UI.
-- User defaults like shortcut mappings and fullscreen behavior are stored in the authenticated user profile.
-- The public lobby shows published songs first, while editing/publishing is limited to logged-in owners.
-
-## Stack
+## Current stack
 
 - Go HTTP server
 - PostgreSQL
 - Vanilla HTML / CSS / JavaScript
 - YouTube IFrame API
-- Supabase auth (email/password)
+- First-party auth with:
+  - email magic links sent through Resend
+  - Google Identity Services for Google sign-in
+  - secure HTTP-only session cookies stored locally by the app
+
+## What changed
+
+- Songs load from PostgreSQL through the Go server.
+- `api/db/patches/*.sql` are applied automatically on startup.
+- `api/config.yaml` now holds the server, PostgreSQL, auth, Resend, Google, and site settings.
+- Supabase has been removed completely.
+- User defaults like shortcut mappings and fullscreen behavior are stored in the authenticated user profile.
+- The public lobby shows published songs first, while editing and publishing is limited to signed-in owners.
+
+## Required config
+
+Copy `api/config.example.yaml` to `api/config.yaml` and fill in:
+
+- `database.*`
+- `resend.api_key`
+- `resend.from_email`
+- `google.client_id`
+- `site.base_url`
+
+Notes:
+
+- `site.base_url` must match the public origin that receives the magic-link callback.
+- `resend.from_email` must be a sender identity that is valid in your Resend account.
+- If `google.client_id` is left blank, Google sign-in stays hidden.
+- If the Resend values are left blank, email magic links stay disabled.
 
 ## Local setup
 
 1. Install Go and PostgreSQL.
 2. Create a database that matches the `database` section in `api/config.yaml`.
-3. Edit `api/config.yaml` with your real PostgreSQL credentials.
+3. Edit `api/config.yaml` with your real credentials and provider keys.
 4. Run:
 
 ```bash
@@ -80,21 +100,16 @@ Example config files are included at:
 
 ## Project layout
 
-- `api/`: Go server, PostgreSQL config, seed import, and SQL patches
+- `api/`: Go server, PostgreSQL config, auth, seed import, and SQL patches
 - `client/`: browser UI, styles, and legal pages
 - `start-server.sh`, `start-dev.sh`, `start-server.ps1`: root-level convenience scripts that point at the `api/` app
 
 ## Important files
 
-- `api/main.go`: HTTP server, API routes, and static-file serving
-- `api/store.go`: PostgreSQL access
-- `api/seed.go`: one-time import of the legacy Rihanna seed into PostgreSQL
-- `api/config.yaml`: local runtime configuration
-- `api/db/patches/001_initial_schema.sql`: initial schema patch
+- `api/main.go`: HTTP server, API routes, auth routes, and static-file serving
+- `api/auth_http.go`: email magic-link, Google sign-in, session cookies, and request guards
+- `api/auth_store.go`: PostgreSQL auth/session persistence
+- `api/store.go`: song and profile persistence
+- `api/config.example.yaml`: runtime configuration template
+- `api/db/patches/003_local_auth.sql`: local auth tables and indexes
 - `client/index.html`, `client/styles.css`, `client/app.js`: browser UI
-
-## Auth note
-
-Supabase is used only for authentication. Song data and user profile defaults live in your PostgreSQL database.
-
-Self-serve account deletion requires a Supabase service role key in `api/config.yaml`. Without that key, the UI explains that deletion is not yet enabled server-side.

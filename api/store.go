@@ -41,7 +41,7 @@ func (s *Store) Close() {
 	s.pool.Close()
 }
 
-func (s *Store) EnsureUserProfile(ctx context.Context, identity SupabaseIdentity) (UserProfile, error) {
+func (s *Store) EnsureUserProfile(ctx context.Context, identity UserIdentity) (UserProfile, error) {
 	settings := encodeJSON(defaultProfileSettings())
 	row := s.pool.QueryRow(ctx, `
 		insert into user_profiles (user_id, email, display_name, settings)
@@ -59,7 +59,7 @@ func (s *Store) EnsureUserProfile(ctx context.Context, identity SupabaseIdentity
 	return scanProfileRow(row)
 }
 
-func (s *Store) SaveUserProfile(ctx context.Context, identity SupabaseIdentity, update ProfileUpdateRequest) (UserProfile, error) {
+func (s *Store) SaveUserProfile(ctx context.Context, identity UserIdentity, update ProfileUpdateRequest) (UserProfile, error) {
 	displayName := strings.TrimSpace(update.DisplayName)
 	if displayName == "" {
 		displayName = ownerDisplayName(identity)
@@ -208,7 +208,7 @@ func (s *Store) GetSong(ctx context.Context, songID string, viewerID string) (So
 	return song, nil
 }
 
-func (s *Store) CreateSong(ctx context.Context, identity SupabaseIdentity, payload SongPayload) (Song, error) {
+func (s *Store) CreateSong(ctx context.Context, identity UserIdentity, payload SongPayload) (Song, error) {
 	normalized, err := normalizeSongPayload(payload)
 	if err != nil {
 		return Song{}, err
@@ -358,7 +358,7 @@ func (s *Store) InsertSeedSong(ctx context.Context, slug string, payload SongPay
 	return nil
 }
 
-func (s *Store) UpdateSong(ctx context.Context, identity SupabaseIdentity, songID string, payload SongPayload) (Song, error) {
+func (s *Store) UpdateSong(ctx context.Context, identity UserIdentity, songID string, payload SongPayload) (Song, error) {
 	normalized, err := normalizeSongPayload(payload)
 	if err != nil {
 		return Song{}, err
@@ -459,6 +459,11 @@ func (s *Store) SoftDeleteProfile(ctx context.Context, userID string) error {
 		update user_profiles
 		set deleted_at = now(),
 			email = '',
+			email_normalized = null,
+			display_name = '',
+			google_subject = null,
+			email_verified_at = null,
+			last_login_at = null,
 			settings = '{}'::jsonb,
 			updated_at = now()
 		where user_id = $1

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/resend/resend-go/v3"
 )
 
 type Server struct {
@@ -21,6 +22,8 @@ type Server struct {
 	clientDir   string
 	projectRoot string
 	httpClient  *http.Client
+	resend      *resend.Client
+	authLimiter *authRateLimiter
 }
 
 func main() {
@@ -55,6 +58,11 @@ func main() {
 		log.Fatalf("bootstrap legacy seed: %v", err)
 	}
 
+	var resendClient *resend.Client
+	if strings.TrimSpace(cfg.Resend.APIKey) != "" {
+		resendClient = resend.NewClient(cfg.Resend.APIKey)
+	}
+
 	server := &Server{
 		cfg:         cfg,
 		store:       store,
@@ -63,6 +71,8 @@ func main() {
 		httpClient: &http.Client{
 			Timeout: 12 * time.Second,
 		},
+		resend:      resendClient,
+		authLimiter: newAuthRateLimiter(),
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -83,6 +93,10 @@ func (s *Server) routes() http.Handler {
 	apiMux := http.NewServeMux()
 	apiMux.HandleFunc("/api/health", s.handleHealth)
 	apiMux.HandleFunc("/api/bootstrap", s.handleBootstrap)
+	apiMux.HandleFunc("/api/auth/session", s.handleAuthSession)
+	apiMux.HandleFunc("/api/auth/email", s.handleStartEmailAuth)
+	apiMux.HandleFunc("/api/auth/google", s.handleGoogleAuth)
+	apiMux.HandleFunc("/api/auth/logout", s.handleLogout)
 	apiMux.HandleFunc("/api/songs", s.handleSongs)
 	apiMux.HandleFunc("/api/songs/", s.handleSongByID)
 	apiMux.HandleFunc("/api/me/profile", s.requireAuth(s.handleProfile))
@@ -92,9 +106,10 @@ func (s *Server) routes() http.Handler {
 
 	rootMux := http.NewServeMux()
 	rootMux.Handle("/api/", apiMux)
+	rootMux.HandleFunc("/auth/email/verify", s.handleEmailAuthCallback)
 	rootMux.HandleFunc("/", s.handleStatic)
 
-	return s.withSecurityHeaders(rootMux)
+	return s.withSecurityHeaders(s.withRequestGuards(rootMux))
 }
 
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
@@ -124,13 +139,13 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
-	connectSrc := "connect-src 'self' " + s.cfg.Supabase.URL + " https://www.youtube.com https://www.googleapis.com"
+	connectSrc := "connect-src 'self' https://www.youtube.com https://www.googleapis.com https://accounts.google.com"
 	csp := strings.Join([]string{
 		"default-src 'self'",
-		"script-src 'self' https://www.youtube.com https://s.ytimg.com https://cdn.jsdelivr.net",
+		"script-src 'self' https://www.youtube.com https://s.ytimg.com https://accounts.google.com",
 		"style-src 'self' 'unsafe-inline'",
-		"img-src 'self' data: https://i.ytimg.com https://img.youtube.com",
-		"frame-src https://www.youtube.com https://www.youtube-nocookie.com",
+		"img-src 'self' data: https://i.ytimg.com https://img.youtube.com https://lh3.googleusercontent.com",
+		"frame-src https://www.youtube.com https://www.youtube-nocookie.com https://accounts.google.com",
 		connectSrc,
 		"font-src 'self'",
 		"object-src 'none'",
@@ -173,12 +188,13 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 			CookiesURL:   "/cookies.html",
 			LicenseURL:   "/LICENSE",
 		},
-		Supabase: SupabasePublic{
-			URL:            s.cfg.Supabase.URL,
-			PublishableKey: s.cfg.Supabase.PublishableKey,
+		Auth: AuthBootstrap{
+			EmailEnabled:   s.emailAuthEnabled(),
+			GoogleEnabled:  s.googleAuthEnabled(),
+			GoogleClientID: s.cfg.Google.ClientID,
 		},
 		Features: FeatureFlags{
-			AccountDeletionEnabled: s.cfg.Supabase.ServiceRoleKey != "",
+			AccountDeletionEnabled: true,
 		},
 		DefaultSettings: defaultProfileSettings(),
 	})
@@ -234,7 +250,7 @@ func (s *Server) handleSongByID(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, song)
 }
 
-func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request, identity SupabaseIdentity) {
+func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request, identity UserIdentity) {
 	switch r.Method {
 	case http.MethodGet:
 		profile, err := s.store.EnsureUserProfile(r.Context(), identity)
@@ -242,7 +258,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request, identity 
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		profile.DeletionEnabled = s.cfg.Supabase.ServiceRoleKey != ""
+		profile.DeletionEnabled = true
 		writeJSON(w, http.StatusOK, profile)
 	case http.MethodPut:
 		var update ProfileUpdateRequest
@@ -255,14 +271,14 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request, identity 
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		profile.DeletionEnabled = s.cfg.Supabase.ServiceRoleKey != ""
+		profile.DeletionEnabled = true
 		writeJSON(w, http.StatusOK, profile)
 	default:
 		writeMethodNotAllowed(w)
 	}
 }
 
-func (s *Server) handleMySongs(w http.ResponseWriter, r *http.Request, identity SupabaseIdentity) {
+func (s *Server) handleMySongs(w http.ResponseWriter, r *http.Request, identity UserIdentity) {
 	switch r.Method {
 	case http.MethodGet:
 		songs, err := s.store.ListUserSongs(r.Context(), identity.ID)
@@ -289,7 +305,7 @@ func (s *Server) handleMySongs(w http.ResponseWriter, r *http.Request, identity 
 	}
 }
 
-func (s *Server) handleMySongByID(w http.ResponseWriter, r *http.Request, identity SupabaseIdentity) {
+func (s *Server) handleMySongByID(w http.ResponseWriter, r *http.Request, identity UserIdentity) {
 	songID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/api/me/songs/"))
 	if songID == "" {
 		writeError(w, http.StatusNotFound, "song not found")
@@ -322,7 +338,7 @@ func (s *Server) handleMySongByID(w http.ResponseWriter, r *http.Request, identi
 	writeJSON(w, http.StatusOK, song)
 }
 
-func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request, identity SupabaseIdentity) {
+func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request, identity UserIdentity) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
 		return
@@ -338,13 +354,8 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request, ide
 		return
 	}
 
-	if s.cfg.Supabase.ServiceRoleKey == "" {
-		writeError(w, http.StatusNotImplemented, "self-serve account deletion needs supabase.service_role_key in api/config.yaml")
-		return
-	}
-
-	if err := s.deleteSupabaseUser(r.Context(), identity.ID); err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+	if err := s.store.RevokeAllSessionsForUser(r.Context(), identity.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if err := s.store.SoftDeleteProfile(r.Context(), identity.ID); err != nil {
@@ -352,127 +363,10 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request, ide
 		return
 	}
 
+	s.clearSessionCookie(w)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"deleted": true,
 	})
-}
-
-func (s *Server) requireAuth(next func(http.ResponseWriter, *http.Request, SupabaseIdentity)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		identity, err := s.authenticateRequest(r)
-		if err != nil {
-			writeError(w, http.StatusUnauthorized, err.Error())
-			return
-		}
-		next(w, r, identity)
-	}
-}
-
-func (s *Server) optionalIdentity(r *http.Request) (*SupabaseIdentity, error) {
-	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-	if authHeader == "" {
-		return nil, nil
-	}
-	identity, err := s.authenticateRequest(r)
-	if err != nil {
-		return nil, err
-	}
-	return &identity, nil
-}
-
-func (s *Server) authenticateRequest(r *http.Request) (SupabaseIdentity, error) {
-	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-	if authHeader == "" {
-		return SupabaseIdentity{}, errors.New("missing bearer token")
-	}
-	if !strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-		return SupabaseIdentity{}, errors.New("invalid authorization header")
-	}
-	token := strings.TrimSpace(authHeader[7:])
-	if token == "" {
-		return SupabaseIdentity{}, errors.New("missing bearer token")
-	}
-	return s.fetchSupabaseIdentity(r.Context(), token)
-}
-
-func (s *Server) fetchSupabaseIdentity(ctx context.Context, accessToken string) (SupabaseIdentity, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.cfg.Supabase.URL+"/auth/v1/user", nil)
-	if err != nil {
-		return SupabaseIdentity{}, fmt.Errorf("build supabase auth request: %w", err)
-	}
-	req.Header.Set("apikey", s.cfg.Supabase.PublishableKey)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return SupabaseIdentity{}, fmt.Errorf("contact supabase auth: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return SupabaseIdentity{}, fmt.Errorf("supabase auth rejected the session")
-	}
-
-	var payload struct {
-		ID           string                 `json:"id"`
-		Email        string                 `json:"email"`
-		UserMetadata map[string]interface{} `json:"user_metadata"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return SupabaseIdentity{}, fmt.Errorf("decode supabase user: %w", err)
-	}
-	if strings.TrimSpace(payload.ID) == "" {
-		return SupabaseIdentity{}, fmt.Errorf("supabase user response was missing an id")
-	}
-
-	displayName := metadataString(payload.UserMetadata, "full_name")
-	if displayName == "" {
-		displayName = metadataString(payload.UserMetadata, "name")
-	}
-	return SupabaseIdentity{
-		ID:          payload.ID,
-		Email:       strings.TrimSpace(payload.Email),
-		DisplayName: displayName,
-	}, nil
-}
-
-func metadataString(values map[string]interface{}, key string) string {
-	if values == nil {
-		return ""
-	}
-	raw, ok := values[key]
-	if !ok || raw == nil {
-		return ""
-	}
-	switch typed := raw.(type) {
-	case string:
-		return strings.TrimSpace(typed)
-	default:
-		return strings.TrimSpace(fmt.Sprint(typed))
-	}
-}
-
-func (s *Server) deleteSupabaseUser(ctx context.Context, userID string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, s.cfg.Supabase.URL+"/auth/v1/admin/users/"+userID, bytes.NewReader([]byte(`{"should_soft_delete":true}`)))
-	if err != nil {
-		return fmt.Errorf("build delete user request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("apikey", s.cfg.Supabase.ServiceRoleKey)
-	req.Header.Set("Authorization", "Bearer "+s.cfg.Supabase.ServiceRoleKey)
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("contact supabase admin API: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		return nil
-	}
-
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	return fmt.Errorf("supabase delete user failed: %s", strings.TrimSpace(string(body)))
 }
 
 func decodeJSONBody(r *http.Request, dst interface{}) error {

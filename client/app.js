@@ -1,4 +1,4 @@
-/* global YT, supabase */
+/* global YT */
 
 const el = (id) => document.getElementById(id);
 
@@ -161,10 +161,15 @@ const dom = {
   authTabLogin: el("authTabLogin"),
   authTabSignup: el("authTabSignup"),
   authForm: el("authForm"),
+  authDisplayNameField: el("authDisplayNameField"),
+  authDisplayName: el("authDisplayName"),
   authEmail: el("authEmail"),
-  authPassword: el("authPassword"),
   authSubmitBtn: el("authSubmitBtn"),
+  authEmailHelp: el("authEmailHelp"),
   authStatus: el("authStatus"),
+  authDivider: el("authDivider"),
+  googleAuthSection: el("googleAuthSection"),
+  googleAuthButton: el("googleAuthButton"),
   profileModal: el("profileModal"),
   closeProfileModalBtn: el("closeProfileModalBtn"),
   profileNameText: el("profileNameText"),
@@ -181,7 +186,6 @@ const dom = {
 
 const app = {
   bootstrap: null,
-  supabase: null,
   session: null,
   profile: null,
   songs: [],
@@ -197,6 +201,7 @@ const app = {
   sections: [],
   searchTerm: "",
   authMode: "login",
+  googleInitialized: false,
   practiceHelperVisible: true,
   practiceLyricsVisible: true,
   practiceLyricsDense: false,
@@ -250,6 +255,7 @@ let practiceResizeObserverAction = "";
 let lastObservedPlayerSurfaceSize = "";
 let lastObservedContextBarSize = "";
 let lastObservedLyricsBoxSize = "";
+let googleIdentityPromise = null;
 
 class MetronomeEngine {
   constructor() {
@@ -429,20 +435,18 @@ function getYouTubeThumbnail(url) {
 
 function getAuthErrorFeedback(error) {
   const rawMessage = String(error?.message || "").trim();
-  const rawCode = String(error?.code || "").trim().toLowerCase();
-  const normalized = rawMessage.toLowerCase();
-
-  if (rawCode === "email_not_confirmed" || normalized.includes("email not confirmed")) {
-    return {
-      inline: "Please confirm your email before logging in. Check your inbox and spam for the confirmation link, then try again.",
-      toast: "Email not confirmed yet. Check your inbox and spam, then log in again."
-    };
-  }
-
   return {
     inline: rawMessage || "Authentication failed.",
     toast: rawMessage || "Authentication failed."
   };
+}
+
+function emailAuthEnabled() {
+  return Boolean(app.bootstrap?.auth?.emailEnabled);
+}
+
+function googleAuthEnabled() {
+  return Boolean(app.bootstrap?.auth?.googleEnabled && app.bootstrap?.auth?.googleClientId);
 }
 
 function getYouTubeInputIssue(label, rawUrl) {
@@ -561,10 +565,12 @@ function nextThemeMode(current) {
 async function apiFetch(path, options = {}) {
   const headers = new Headers(options.headers || {});
   headers.set("Content-Type", "application/json");
-  const token = app.session?.access_token;
-  if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const response = await fetch(path, { ...options, headers });
+  const response = await fetch(path, {
+    ...options,
+    headers,
+    credentials: "same-origin"
+  });
   const text = await response.text();
   let data = null;
   if (text) {
@@ -1769,16 +1775,16 @@ function renderEditorHeader(song = null) {
 }
 
 function renderProfile() {
-  dom.profileNameText.textContent = app.profile?.displayName || app.session?.user?.email || "Guest";
+  dom.profileNameText.textContent = app.profile?.displayName || app.session?.user?.displayName || app.session?.user?.email || "Guest";
   dom.profileEmailText.textContent = app.profile?.email || "";
   const confirmationMatches = dom.deleteAccountConfirmInput.value.trim() === DELETE_ACCOUNT_CONFIRMATION;
   dom.deleteAccountBtn.disabled = !app.profile?.deletionEnabled || !confirmationMatches;
   if (!app.profile?.deletionEnabled) {
-    dom.deleteAccountStatus.textContent = "Self-serve deletion is disabled until a Supabase service role key is configured on the server.";
+    dom.deleteAccountStatus.textContent = "Account deletion is unavailable right now.";
     return;
   }
   if (!dom.deleteAccountStatus.textContent) {
-    dom.deleteAccountStatus.textContent = `Deleting your account will remove your local profile data and request Supabase account deletion. Type ${DELETE_ACCOUNT_CONFIRMATION} exactly, then confirm the dialog. Published songs may remain visible.`;
+    dom.deleteAccountStatus.textContent = `Deleting your account will remove your local profile data and end your active sessions. Published songs may remain visible. Type ${DELETE_ACCOUNT_CONFIRMATION} exactly, then confirm the dialog.`;
   }
 }
 
@@ -2365,15 +2371,38 @@ function resetDeleteAccountForm() {
   dom.deleteAccountStatus.textContent = "";
 }
 
+function syncAuthModalState() {
+  const signup = app.authMode === "signup";
+  dom.authTabLogin.classList.toggle("active", !signup);
+  dom.authTabSignup.classList.toggle("active", signup);
+  dom.authDisplayNameField.classList.toggle("hidden", !signup);
+  dom.authDisplayName.required = signup && emailAuthEnabled();
+  dom.authDisplayName.disabled = !emailAuthEnabled();
+  dom.authEmail.disabled = !emailAuthEnabled();
+  dom.authSubmitBtn.disabled = !emailAuthEnabled();
+  dom.authSubmitBtn.textContent = signup ? "Create by email" : "Send secure link";
+  dom.authEmailHelp.textContent = emailAuthEnabled()
+    ? signup
+      ? "We will email a verification link. No password is stored on this site."
+      : "We will email a one-tap sign-in link."
+    : "Email sign-in is not configured on this server yet.";
+
+  const showGoogle = googleAuthEnabled();
+  dom.googleAuthSection.classList.toggle("hidden", !showGoogle);
+  dom.authDivider.classList.toggle("hidden", !(emailAuthEnabled() && showGoogle));
+
+  if (showGoogle) renderGoogleAuthButton();
+}
+
 function openAuthModal(mode) {
   app.authMode = mode;
-  const login = mode !== "signup";
-  dom.authTabLogin.classList.toggle("active", login);
-  dom.authTabSignup.classList.toggle("active", !login);
-  dom.authSubmitBtn.textContent = login ? "Log in" : "Create account";
-  dom.authPassword.autocomplete = login ? "current-password" : "new-password";
   dom.authStatus.textContent = "";
+  syncAuthModalState();
   openModal(dom.authModal);
+  if (googleAuthEnabled() && !app.googleInitialized) {
+    void initGoogleIdentity();
+  }
+  renderGoogleAuthButton();
 }
 
 function openProfileModal() {
@@ -2383,36 +2412,96 @@ function openProfileModal() {
   openModal(dom.profileModal);
 }
 
-async function handleAuthSubmit(event) {
-  event.preventDefault();
-  if (!app.supabase) return;
-  const email = dom.authEmail.value.trim();
-  const password = dom.authPassword.value;
-  if (!email || !password) return;
-  dom.authStatus.textContent = app.authMode === "signup" ? "Creating account…" : "Logging in…";
+function loadGoogleIdentityClient() {
+  if (!googleAuthEnabled()) return Promise.resolve(null);
+  if (window.google?.accounts?.id) return Promise.resolve(window.google);
+  if (googleIdentityPromise) return googleIdentityPromise;
 
-  try {
-    if (app.authMode === "signup") {
-      const result = await app.supabase.auth.signUp({ email, password });
-      if (result.error) throw result.error;
-      const needsConfirmation = !result.data?.session;
-      dom.authStatus.textContent = needsConfirmation
-        ? "Check your inbox to confirm your email, then come back and log in."
-        : "Account created. You are logged in.";
-      showToast(
-        needsConfirmation
-          ? "Confirmation email sent. Finish verification, then log in."
-          : "Account created.",
-        "success"
-      );
-      if (!needsConfirmation) closeModal(dom.authModal);
+  googleIdentityPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector("script[data-google-identity='true']");
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.google), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Google sign-in failed to load.")), { once: true });
       return;
     }
 
-    const result = await app.supabase.auth.signInWithPassword({ email, password });
-    if (result.error) throw result.error;
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.dataset.googleIdentity = "true";
+    script.addEventListener("load", () => resolve(window.google), { once: true });
+    script.addEventListener("error", () => reject(new Error("Google sign-in failed to load.")), { once: true });
+    document.head.appendChild(script);
+  });
+
+  return googleIdentityPromise;
+}
+
+async function initGoogleIdentity() {
+  if (!googleAuthEnabled()) {
+    dom.googleAuthSection.classList.add("hidden");
+    dom.authDivider.classList.add("hidden");
+    return;
+  }
+
+  try {
+    await loadGoogleIdentityClient();
+    if (!window.google?.accounts?.id) {
+      throw new Error("Google sign-in is unavailable right now.");
+    }
+    if (!app.googleInitialized) {
+      window.google.accounts.id.initialize({
+        client_id: app.bootstrap.auth.googleClientId,
+        callback: (response) => {
+          void handleGoogleCredential(response);
+        },
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        ux_mode: "popup"
+      });
+      app.googleInitialized = true;
+    }
+    renderGoogleAuthButton();
+  } catch (error) {
+    dom.googleAuthSection.classList.add("hidden");
+    dom.authDivider.classList.add("hidden");
+    showToast(error.message, "danger");
+  }
+}
+
+function renderGoogleAuthButton() {
+  if (!dom.googleAuthButton) return;
+  dom.googleAuthButton.innerHTML = "";
+  if (!googleAuthEnabled() || !app.googleInitialized || !window.google?.accounts?.id) return;
+
+  const width = Math.min(360, Math.max(240, dom.googleAuthButton.clientWidth || 320));
+  window.google.accounts.id.renderButton(dom.googleAuthButton, {
+    type: "standard",
+    theme: "outline",
+    size: "large",
+    text: "continue_with",
+    shape: "pill",
+    width,
+    logo_alignment: "left"
+  });
+}
+
+async function handleGoogleCredential(response) {
+  if (!response?.credential) {
+    dom.authStatus.textContent = "Google did not return a usable credential.";
+    return;
+  }
+
+  dom.authStatus.textContent = "Signing in with Google…";
+  try {
+    const session = await apiFetch("/api/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ credential: response.credential })
+    });
+    await handleSessionChanged(session);
     closeModal(dom.authModal);
-    showToast("Logged in.", "success");
+    showToast("Logged in with Google.", "success");
   } catch (error) {
     const feedback = getAuthErrorFeedback(error);
     dom.authStatus.textContent = feedback.inline;
@@ -2420,8 +2509,62 @@ async function handleAuthSubmit(event) {
   }
 }
 
+async function handleAuthSubmit(event) {
+  event.preventDefault();
+  if (!emailAuthEnabled()) return;
+  const email = dom.authEmail.value.trim();
+  const displayName = dom.authDisplayName.value.trim();
+  if (!email) return;
+  dom.authStatus.textContent = app.authMode === "signup"
+    ? "Sending verification link…"
+    : "Sending sign-in link…";
+
+  try {
+    const result = await apiFetch("/api/auth/email", {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+        displayName,
+        mode: app.authMode
+      })
+    });
+    dom.authStatus.textContent = result?.message || "Check your inbox for the secure link.";
+    showToast("Secure sign-in link sent.", "success");
+  } catch (error) {
+    const feedback = getAuthErrorFeedback(error);
+    dom.authStatus.textContent = feedback.inline;
+    showToast(feedback.toast, "danger");
+  }
+}
+
+async function initAuthSession() {
+  const session = await apiFetch("/api/auth/session", { method: "GET" });
+  await handleSessionChanged(session);
+}
+
+function handleAuthRedirectParams() {
+  const url = new URL(window.location.href);
+  const auth = url.searchParams.get("auth");
+  const authError = url.searchParams.get("authError");
+  if (!auth && !authError) return;
+
+  url.searchParams.delete("auth");
+  url.searchParams.delete("authError");
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+
+  if (authError) {
+    showToast(authError, "danger");
+    return;
+  }
+
+  const message = auth === "signup"
+    ? "Email confirmed. You are logged in."
+    : "You are logged in.";
+  showToast(message, "success");
+}
+
 async function handleSessionChanged(session) {
-  app.session = session || null;
+  app.session = session?.user ? session : null;
   setAuthIndicator();
   if (app.session?.user) {
     try {
@@ -2474,7 +2617,7 @@ async function saveProfileSettings() {
     app.profile = await apiFetch("/api/me/profile", {
       method: "PUT",
       body: JSON.stringify({
-        displayName: app.profile?.displayName || app.session.user.email || "",
+        displayName: app.profile?.displayName || app.session.user.displayName || app.session.user.email || "",
         settings
       })
     });
@@ -3080,7 +3223,6 @@ async function deleteAccount() {
       body: JSON.stringify({ confirmation })
     });
     await handleSessionChanged(null);
-    await app.supabase.auth.signOut();
     resetDeleteAccountForm();
     closeModal(dom.profileModal);
     createNewDraft(true, { quiet: true, screen: "lobby" });
@@ -3097,23 +3239,7 @@ async function initBootstrap() {
   const localSettings = safeGet(STORAGE_KEYS.settings, null);
   applySettings(localSettings ? JSON.parse(localSettings) : getDefaultSettings(), false);
   initTheme();
-}
-
-async function initSupabase() {
-  if (!window.supabase?.createClient) {
-    throw new Error("Supabase browser client failed to load.");
-  }
-  app.supabase = window.supabase.createClient(
-    app.bootstrap.supabase.url,
-    app.bootstrap.supabase.publishableKey,
-    { auth: { autoRefreshToken: true, persistSession: true } }
-  );
-  const { data } = await app.supabase.auth.getSession();
-  app.session = data.session || null;
-  app.supabase.auth.onAuthStateChange((_event, session) => {
-    handleSessionChanged(session);
-  });
-  await handleSessionChanged(app.session);
+  syncAuthModalState();
 }
 
 function bindEvents() {
@@ -3138,8 +3264,13 @@ function bindEvents() {
   dom.practiceWorkspaceBtn.addEventListener("click", () => setScreen("workspace"));
   dom.profileBtn.addEventListener("click", openProfileModal);
   dom.logoutBtn.addEventListener("click", async () => {
-    await app.supabase.auth.signOut();
-    showToast("Logged out.", "success");
+    try {
+      await apiFetch("/api/auth/logout", { method: "POST", body: "{}" });
+      await handleSessionChanged(null);
+      showToast("Logged out.", "success");
+    } catch (error) {
+      showToast(error.message, "danger");
+    }
   });
 
   dom.authTabLogin.addEventListener("click", () => openAuthModal("login"));
@@ -3352,7 +3483,9 @@ async function init() {
   restoreDraft();
   try {
     await initBootstrap();
-    await initSupabase();
+    await initAuthSession();
+    handleAuthRedirectParams();
+    await initGoogleIdentity();
   } catch (error) {
     setBootstrapStatus(error.message);
     showToast(error.message, "danger");

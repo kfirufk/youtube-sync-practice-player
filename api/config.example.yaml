@@ -10,10 +10,18 @@ database:
   password: change-me
   sslmode: disable
 
-supabase:
-  url: https://gsjgqebkxcdcbtklcfjf.supabase.co
-  publishable_key: sb_publishable_lHmr9O_u-I3UgH-ze5rLpQ_9fb8R_Pn
-  service_role_key: ""
+auth:
+  session_cookie_name: sync_session
+  session_ttl_hours: 720
+  magic_link_ttl_minutes: 20
+
+resend:
+  api_key: ""
+  from_email: "sync.tvguitar.com <auth@yourdomain.com>"
+  reply_to_email: ""
+
+google:
+  client_id: ""
 
 site:
   name: sync.tvguitar.com

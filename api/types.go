@@ -17,7 +17,7 @@ var (
 
 type BootstrapResponse struct {
 	Site            SiteBootstrap   `json:"site"`
-	Supabase        SupabasePublic  `json:"supabase"`
+	Auth            AuthBootstrap   `json:"auth"`
 	Features        FeatureFlags    `json:"features"`
 	DefaultSettings ProfileSettings `json:"defaultSettings"`
 }
@@ -33,19 +33,30 @@ type SiteBootstrap struct {
 	LicenseURL   string `json:"licenseUrl"`
 }
 
-type SupabasePublic struct {
-	URL            string `json:"url"`
-	PublishableKey string `json:"publishableKey"`
+type AuthBootstrap struct {
+	EmailEnabled   bool   `json:"emailEnabled"`
+	GoogleEnabled  bool   `json:"googleEnabled"`
+	GoogleClientID string `json:"googleClientId"`
 }
 
 type FeatureFlags struct {
 	AccountDeletionEnabled bool `json:"accountDeletionEnabled"`
 }
 
-type SupabaseIdentity struct {
+type UserIdentity struct {
 	ID          string
 	Email       string
 	DisplayName string
+}
+
+type AuthSessionResponse struct {
+	User *AuthenticatedUser `json:"user,omitempty"`
+}
+
+type AuthenticatedUser struct {
+	ID          string `json:"id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"displayName"`
 }
 
 type UserProfile struct {
@@ -64,6 +75,20 @@ type ProfileUpdateRequest struct {
 
 type DeleteAccountRequest struct {
 	Confirmation string `json:"confirmation"`
+}
+
+type StartEmailAuthRequest struct {
+	Email       string `json:"email"`
+	DisplayName string `json:"displayName"`
+	Mode        string `json:"mode"`
+}
+
+type StartEmailAuthResponse struct {
+	Message string `json:"message"`
+}
+
+type GoogleAuthRequest struct {
+	Credential string `json:"credential"`
 }
 
 type ProfileSettings struct {
@@ -380,7 +405,7 @@ func slugify(parts ...string) string {
 	return joined
 }
 
-func ownerDisplayName(identity SupabaseIdentity) string {
+func ownerDisplayName(identity UserIdentity) string {
 	if strings.TrimSpace(identity.DisplayName) != "" {
 		return strings.TrimSpace(identity.DisplayName)
 	}
@@ -392,6 +417,17 @@ func ownerDisplayName(identity SupabaseIdentity) string {
 		return email[:idx]
 	}
 	return email
+}
+
+func authenticatedUser(identity UserIdentity) *AuthenticatedUser {
+	if strings.TrimSpace(identity.ID) == "" {
+		return nil
+	}
+	return &AuthenticatedUser{
+		ID:          identity.ID,
+		Email:       strings.TrimSpace(identity.Email),
+		DisplayName: ownerDisplayName(identity),
+	}
 }
 
 func round3(value float64) float64 {

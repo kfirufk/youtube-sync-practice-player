@@ -1218,6 +1218,55 @@ input[type="range"] {
   gap: 10px;
 }
 
+.authIntro {
+  margin: 0 0 2px;
+}
+
+.authField {
+  display: grid;
+  gap: 8px;
+}
+
+.authDivider {
+  position: relative;
+  margin: 16px 0 12px;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+.authDivider::before {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 1px;
+  background: rgba(92, 109, 133, 0.28);
+}
+
+.authDivider span {
+  position: relative;
+  display: inline-block;
+  padding: 0 12px;
+  background: var(--panel-strong);
+}
+
+.googleAuthPanel {
+  display: grid;
+  gap: 10px;
+}
+
+.googleButtonWrap {
+  display: flex;
+  justify-content: center;
+  min-height: 42px;
+}
+
+.authNote {
+  margin: 0;
+}
+
 .dangerConfirmLabel {
   display: block;
   margin: 10px 0 6px;

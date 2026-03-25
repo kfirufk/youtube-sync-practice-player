@@ -12,7 +12,9 @@ import (
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
-	Supabase SupabaseConfig `yaml:"supabase"`
+	Auth     AuthConfig     `yaml:"auth"`
+	Resend   ResendConfig   `yaml:"resend"`
+	Google   GoogleConfig   `yaml:"google"`
 	Site     SiteConfig     `yaml:"site"`
 }
 
@@ -30,10 +32,20 @@ type DatabaseConfig struct {
 	SSLMode  string `yaml:"sslmode"`
 }
 
-type SupabaseConfig struct {
-	URL             string `yaml:"url"`
-	PublishableKey  string `yaml:"publishable_key"`
-	ServiceRoleKey  string `yaml:"service_role_key"`
+type AuthConfig struct {
+	SessionCookieName   string `yaml:"session_cookie_name"`
+	SessionTTLHours     int    `yaml:"session_ttl_hours"`
+	MagicLinkTTLMinutes int    `yaml:"magic_link_ttl_minutes"`
+}
+
+type ResendConfig struct {
+	APIKey       string `yaml:"api_key"`
+	FromEmail    string `yaml:"from_email"`
+	ReplyToEmail string `yaml:"reply_to_email"`
+}
+
+type GoogleConfig struct {
+	ClientID string `yaml:"client_id"`
 }
 
 type SiteConfig struct {
@@ -56,10 +68,13 @@ func defaultConfig() Config {
 			User:    "postgres",
 			SSLMode: "disable",
 		},
-		Supabase: SupabaseConfig{
-			URL:            "https://gsjgqebkxcdcbtklcfjf.supabase.co",
-			PublishableKey: "sb_publishable_lHmr9O_u-I3UgH-ze5rLpQ_9fb8R_Pn",
+		Auth: AuthConfig{
+			SessionCookieName:   "sync_session",
+			SessionTTLHours:     24 * 30,
+			MagicLinkTTLMinutes: 20,
 		},
+		Resend: ResendConfig{},
+		Google: GoogleConfig{},
 		Site: SiteConfig{
 			Name:         "sync.tvguitar.com",
 			Domain:       "sync.tvguitar.com",
@@ -103,9 +118,21 @@ func (cfg *Config) normalize() {
 		cfg.Database.SSLMode = "disable"
 	}
 
-	cfg.Supabase.URL = strings.TrimSpace(strings.TrimRight(cfg.Supabase.URL, "/"))
-	cfg.Supabase.PublishableKey = strings.TrimSpace(cfg.Supabase.PublishableKey)
-	cfg.Supabase.ServiceRoleKey = strings.TrimSpace(cfg.Supabase.ServiceRoleKey)
+	cfg.Auth.SessionCookieName = strings.TrimSpace(cfg.Auth.SessionCookieName)
+	if cfg.Auth.SessionCookieName == "" {
+		cfg.Auth.SessionCookieName = "sync_session"
+	}
+	if cfg.Auth.SessionTTLHours <= 0 {
+		cfg.Auth.SessionTTLHours = 24 * 30
+	}
+	if cfg.Auth.MagicLinkTTLMinutes <= 0 {
+		cfg.Auth.MagicLinkTTLMinutes = 20
+	}
+
+	cfg.Resend.APIKey = strings.TrimSpace(cfg.Resend.APIKey)
+	cfg.Resend.FromEmail = strings.TrimSpace(cfg.Resend.FromEmail)
+	cfg.Resend.ReplyToEmail = strings.TrimSpace(cfg.Resend.ReplyToEmail)
+	cfg.Google.ClientID = strings.TrimSpace(cfg.Google.ClientID)
 
 	if strings.TrimSpace(cfg.Site.Name) == "" {
 		cfg.Site.Name = "sync.tvguitar.com"

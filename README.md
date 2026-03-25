@@ -9,7 +9,7 @@ A Go + PostgreSQL practice player for syncing a tutorial video and an official c
 - Vanilla HTML / CSS / JavaScript
 - YouTube IFrame API
 - First-party auth with:
-  - email magic links sent through Resend
+  - email magic links sent through SMTP
   - Google Identity Services for Google sign-in
   - secure HTTP-only session cookies stored locally by the app
 
@@ -17,7 +17,7 @@ A Go + PostgreSQL practice player for syncing a tutorial video and an official c
 
 - Songs load from PostgreSQL through the Go server.
 - `api/db/patches/*.sql` are applied automatically on startup.
-- `api/config.yaml` now holds the server, PostgreSQL, auth, Resend, Google, and site settings.
+- `api/config.yaml` now holds the server, PostgreSQL, auth, email SMTP, Google, and site settings.
 - Supabase has been removed completely.
 - User defaults like shortcut mappings and fullscreen behavior are stored in the authenticated user profile.
 - The public lobby shows published songs first, while editing and publishing is limited to signed-in owners.
@@ -27,21 +27,21 @@ A Go + PostgreSQL practice player for syncing a tutorial video and an official c
 Copy `api/config.example.yaml` to `api/config.yaml` and fill in:
 
 - `database.*`
-- `resend.from_email`
-- `resend.smtp.host`
-- `resend.smtp.port`
-- `resend.smtp.user`
-- `resend.smtp.password`
+- `email.from_email`
+- `email.smtp.host`
+- `email.smtp.port`
+- `email.smtp.user`
+- `email.smtp.password`
 - `google.client_id`
 - `site.base_url`
 
 Notes:
 
 - `site.base_url` must match the public origin that receives the magic-link callback.
-- `resend.from_email` must be a sender identity that is valid in your Resend account.
-- Resend SMTP commonly uses `smtp.resend.com`, user `resend`, and your Resend SMTP/API secret as the SMTP password.
+- `email.from_email` must be a valid sender identity for your SMTP provider.
+- If you use Resend SMTP, the common settings are `smtp.resend.com`, user `resend`, and your Resend SMTP/API secret as the SMTP password.
 - If `google.client_id` is left blank, Google sign-in stays hidden.
-- If the Resend values are left blank, email magic links stay disabled.
+- If the email SMTP values are left blank, email magic links stay disabled.
 
 ## Local setup
 

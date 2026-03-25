@@ -69,11 +69,11 @@ func (l *authRateLimiter) Allow(key string, limit int, window time.Duration) boo
 }
 
 func (s *Server) emailAuthEnabled() bool {
-	return strings.TrimSpace(s.cfg.Resend.FromEmail) != "" &&
-		strings.TrimSpace(s.cfg.Resend.SMTP.Host) != "" &&
-		s.cfg.Resend.SMTP.Port > 0 &&
-		strings.TrimSpace(s.cfg.Resend.SMTP.User) != "" &&
-		strings.TrimSpace(s.cfg.Resend.SMTP.Password) != ""
+	return strings.TrimSpace(s.cfg.Email.FromEmail) != "" &&
+		strings.TrimSpace(s.cfg.Email.SMTP.Host) != "" &&
+		s.cfg.Email.SMTP.Port > 0 &&
+		strings.TrimSpace(s.cfg.Email.SMTP.User) != "" &&
+		strings.TrimSpace(s.cfg.Email.SMTP.Password) != ""
 }
 
 func (s *Server) googleAuthEnabled() bool {
@@ -425,10 +425,10 @@ func (s *Server) sendMagicLinkEmail(ctx context.Context, email string, rawToken 
 	)
 
 	message, err := buildEmailMessage(
-		s.cfg.Resend.FromEmail,
+		s.cfg.Email.FromEmail,
 		email,
 		subject,
-		s.cfg.Resend.ReplyToEmail,
+		s.cfg.Email.ReplyToEmail,
 		text,
 		htmlBody,
 	)
@@ -436,12 +436,12 @@ func (s *Server) sendMagicLinkEmail(ctx context.Context, email string, rawToken 
 		return fmt.Errorf("build magic link email: %w", err)
 	}
 
-	fromAddress, err := smtpEnvelopeAddress(s.cfg.Resend.FromEmail)
+	fromAddress, err := smtpEnvelopeAddress(s.cfg.Email.FromEmail)
 	if err != nil {
 		return err
 	}
 
-	if err := sendSMTPMail(ctx, s.cfg.Resend.SMTP, fromAddress, []string{email}, message); err != nil {
+	if err := sendSMTPMail(ctx, s.cfg.Email.SMTP, fromAddress, []string{email}, message); err != nil {
 		return fmt.Errorf("send magic link email: %w", err)
 	}
 	return nil
@@ -449,7 +449,7 @@ func (s *Server) sendMagicLinkEmail(ctx context.Context, email string, rawToken 
 
 func buildEmailMessage(fromHeader string, to string, subject string, replyTo string, textBody string, htmlBody string) ([]byte, error) {
 	if strings.TrimSpace(fromHeader) == "" {
-		return nil, errors.New("resend.from_email is required")
+		return nil, errors.New("email.from_email is required")
 	}
 	if _, err := smtpEnvelopeAddress(fromHeader); err != nil {
 		return nil, err
@@ -503,7 +503,7 @@ func writeSMTPPart(out *bytes.Buffer, boundary string, contentType string, body 
 func smtpEnvelopeAddress(raw string) (string, error) {
 	parsed, err := mail.ParseAddress(strings.TrimSpace(raw))
 	if err != nil || strings.TrimSpace(parsed.Address) == "" {
-		return "", errors.New("resend.from_email must be a valid email sender")
+		return "", errors.New("email.from_email must be a valid email sender")
 	}
 	return strings.TrimSpace(parsed.Address), nil
 }

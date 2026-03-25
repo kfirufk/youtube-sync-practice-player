@@ -13,7 +13,7 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
 	Auth     AuthConfig     `yaml:"auth"`
-	Resend   ResendConfig   `yaml:"resend"`
+	Email    EmailConfig    `yaml:"email"`
 	Google   GoogleConfig   `yaml:"google"`
 	Site     SiteConfig     `yaml:"site"`
 }
@@ -38,7 +38,7 @@ type AuthConfig struct {
 	MagicLinkTTLMinutes int    `yaml:"magic_link_ttl_minutes"`
 }
 
-type ResendConfig struct {
+type EmailConfig struct {
 	FromEmail    string     `yaml:"from_email"`
 	ReplyToEmail string     `yaml:"reply_to_email"`
 	SMTP         SMTPConfig `yaml:"smtp"`
@@ -80,7 +80,7 @@ func defaultConfig() Config {
 			SessionTTLHours:     24 * 30,
 			MagicLinkTTLMinutes: 20,
 		},
-		Resend: ResendConfig{
+		Email: EmailConfig{
 			SMTP: SMTPConfig{
 				Host: "smtp.resend.com",
 				Port: 465,
@@ -142,20 +142,20 @@ func (cfg *Config) normalize() {
 		cfg.Auth.MagicLinkTTLMinutes = 20
 	}
 
-	cfg.Resend.FromEmail = strings.TrimSpace(cfg.Resend.FromEmail)
-	cfg.Resend.ReplyToEmail = strings.TrimSpace(cfg.Resend.ReplyToEmail)
-	cfg.Resend.SMTP.Host = strings.TrimSpace(cfg.Resend.SMTP.Host)
-	if cfg.Resend.SMTP.Host == "" {
-		cfg.Resend.SMTP.Host = "smtp.resend.com"
+	cfg.Email.FromEmail = strings.TrimSpace(cfg.Email.FromEmail)
+	cfg.Email.ReplyToEmail = strings.TrimSpace(cfg.Email.ReplyToEmail)
+	cfg.Email.SMTP.Host = strings.TrimSpace(cfg.Email.SMTP.Host)
+	if cfg.Email.SMTP.Host == "" {
+		cfg.Email.SMTP.Host = "smtp.resend.com"
 	}
-	if cfg.Resend.SMTP.Port <= 0 {
-		cfg.Resend.SMTP.Port = 465
+	if cfg.Email.SMTP.Port <= 0 {
+		cfg.Email.SMTP.Port = 465
 	}
-	cfg.Resend.SMTP.User = strings.TrimSpace(cfg.Resend.SMTP.User)
-	if cfg.Resend.SMTP.User == "" {
-		cfg.Resend.SMTP.User = "resend"
+	cfg.Email.SMTP.User = strings.TrimSpace(cfg.Email.SMTP.User)
+	if cfg.Email.SMTP.User == "" {
+		cfg.Email.SMTP.User = "resend"
 	}
-	cfg.Resend.SMTP.Password = strings.TrimSpace(cfg.Resend.SMTP.Password)
+	cfg.Email.SMTP.Password = strings.TrimSpace(cfg.Email.SMTP.Password)
 	cfg.Google.ClientID = strings.TrimSpace(cfg.Google.ClientID)
 
 	if strings.TrimSpace(cfg.Site.Name) == "" {
